@@ -1,0 +1,48 @@
+# Windows and editors
+Thumbs.db
+Desktop.ini
+.DS_Store
+.idea/
+.vscode/
+
+# Python
+**/__pycache__/
+**/*.py[cod]
+**/.venv/
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+
+# Node.js and generated frontend/video builds
+**/node_modules/
+**/build/
+**/dist/
+
+# Local runtime state, models, caches, and logs
+**/.cache/
+**/.temp/
+**/var/
+**/logs/
+*.log
+*.bak
+
+# Local secrets and credentials
+**/.env
+**/.env.*
+!**/.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Generated deliverables, source material, and large media
+/产出/
+/素材/
+/工作文件/*
+!/工作文件/app/
+*.mp4
+*.mov
+*.mkv
+*.webm
+*.wav
+*.mp3

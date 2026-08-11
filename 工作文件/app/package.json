@@ -1,0 +1,9 @@
+{
+  "name": "project024-douyin-browser-worker",
+  "private": true,
+  "version": "0.3.1",
+  "description": "Isolated public-page browser fallback for project024 acquisition",
+  "dependencies": {
+    "playwright-core": "1.58.2"
+  }
+}

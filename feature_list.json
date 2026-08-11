@@ -1,0 +1,233 @@
+{
+  "schema": "project024-feature-list/v1",
+  "project_id": "024",
+  "updated_at": "2026-08-12",
+  "features": [
+    {
+      "id": "P0-01",
+      "priority": 0,
+      "title": "持久进度与回滚基线",
+      "status": "completed",
+      "passes": true,
+      "acceptance": [
+        "项目根目录存在可解析的 feature_list.json 和可读的 PROGRESS.md",
+        "全局项目记忆能够按项目根目录加载 CORE.md、STATE.md 和 INDEX.md",
+        "修改前代码快照位于活动项目之外并带 SHA-256"
+      ],
+      "evidence": [
+        "feature_list.json 解析成功，共 10 个条目",
+        "load-project-memory.ps1 返回 schema=project-memory/v1、project_id=024、truncated=false",
+        "活动项目外备份包含 64 条 SHA-256 记录"
+      ]
+    },
+    {
+      "id": "P0-02",
+      "priority": 1,
+      "title": "TikTok 代理预检与公开媒体采集",
+      "status": "completed",
+      "passes": true,
+      "acceptance": [
+        "代理不可用时返回明确阻塞和重试动作",
+        "未登记公开链接能够解析元数据并获取平台字幕或音轨",
+        "采集过程在隔离 Worker 中运行且原始日志不进入默认响应"
+      ],
+      "evidence": [
+        "真实未登记链接 6898699405898059010 在隔离 Worker 中完成媒体、元数据和音轨采集，任务 acq_20260810T175240Z_8718423049b3 状态为 completed",
+        "将代理指向 127.0.0.1:9 后，独立任务返回 needs_input、明确提示开启电脑 VPN，且 cache_hit=false",
+        "yt-dlp 备用元数据在登记前按公开字段白名单收敛；真实产物不含 cookies、formats、http_headers 或签名媒体 URL",
+        "采集、代理、字幕优先、音轨兜底、脱敏和 Worker 校验定向测试通过"
+      ]
+    },
+    {
+      "id": "P0-03",
+      "priority": 2,
+      "title": "GPU 本地字幕转写",
+      "status": "completed",
+      "passes": true,
+      "acceptance": [
+        "模型和缓存只写入 G 盘",
+        "无平台字幕时自动产生非空字幕、语言和分段时间码",
+        "真实样本记录冷启动、热启动和总转写耗时"
+      ],
+      "evidence": [
+        "large-v3-turbo 模型缓存位于项目 G 盘；Windows CUDA 12 cuBLAS/cuDNN 运行库安装在项目虚拟环境",
+        "真实 Worker 使用 RTX 4060 Ti 的 cuda/int8_float16 完成 62 字符、2 段带时间码字幕，无 CPU fallback；模型加载 3.962 秒、转写 3.373 秒、总计 7.335 秒",
+        "同进程真实样本冷启动总计 7.880 秒，热启动模型加载 0.000 秒、总计 3.576 秒"
+      ]
+    },
+    {
+      "id": "P0-04",
+      "priority": 3,
+      "title": "精简证据清单与缓存",
+      "status": "completed",
+      "passes": true,
+      "acceptance": [
+        "清单包含来源、哈希、字幕分段和缺失项",
+        "默认清单有大小上限且原始媒体按白名单读取",
+        "只有 completed 任务进入缓存"
+      ],
+      "evidence": [
+        "真实 evidence_manifest.json 为 5030 字节，含来源、稳定 ID、字幕语言、分段计数、缺失项和 5 个带 SHA-256 的白名单产物",
+        "context_policy.raw_artifacts_included=false，Worker stdout/stderr 均为空，默认响应不内嵌媒体或原始日志",
+        "同一来源与参数二次提交命中同一 completed 任务；needs_input 定向测试确认不会进入缓存",
+        "Python 全量回归 39/39 通过，pip check 未发现依赖冲突"
+      ]
+    },
+    {
+      "id": "P1-01",
+      "priority": 4,
+      "title": "采集结果自动进入内容分析",
+      "status": "completed",
+      "passes": true,
+      "acceptance": [
+        "甲方不需要手动粘贴字幕",
+        "字幕、画面和数字证据进入同一分析任务",
+        "证据不足时保留真实边界而不是生成伪结论"
+      ],
+      "evidence": [
+        "新增 POST /api/acquisition/jobs/{job_id}/analyze；只接受 completed 且 analysis_ready=true 的清单，拒绝 queued、processing、needs_input、failed、空字幕和客户端 transcript 覆盖",
+        "真实 HTTP 验收从完成态任务自动带入 local_asr 字幕、64 位字幕 SHA-256 和公开指标；验证进程 generation_status=not_configured、paid_api_called=false",
+        "Web 无字幕主路径已改为提交采集、轮询终态、按任务分析；显式人工字幕仅保留为降级入口，登记样本继续使用 reviewed fixture",
+        "Python 全量回归 44/44 通过；桌面与 390px 手机 Playwright 验收 36/36，控制台、页面异常、失败请求、4xx/5xx、溢出、裁切和控件重叠均为 0"
+      ]
+    },
+    {
+      "id": "P1-02",
+      "priority": 5,
+      "title": "通俗移动端结果与折叠证据",
+      "status": "completed",
+      "passes": true,
+      "acceptance": [
+        "手机首屏可提交链接并查看任务状态",
+        "结论、内容包和发布确认使用普通用户语言",
+        "数字旁可打开对应来源、采集时间和证据强度"
+      ],
+      "evidence": [
+        "真实完成态 TikTok 任务和登记抖音样本均在 1440px 桌面与 390px 手机页面完成主路径验收，字幕框保持为空且提交中、解读中状态可见",
+        "实时样本 5 个公开数字、登记样本 4 个公开数字均紧邻默认收起的查看依据；逐项展开可见中文证据强度、采集完成时间、任务号、64 位 source.json SHA-256，源证据和清单链接均返回 HTTP 200",
+        "登记样本完整推荐稿、6 段拍摄表和发布配套均真实渲染；publishable=false 时第 4 关显示待补充、进度保持 3/4、复制动作保持研究稿边界",
+        "Python 全量回归 44/44、compileall、pip check 和扩展 Playwright 验收 175/175 通过；控制台、页面异常、失败请求、4xx/5xx、溢出、裁切和非浮动控件重叠均为 0",
+        "最终 DOM、JSON 和可读截图证据位于 产出\\验真\\p1_02_verified_20260811_r11"
+      ]
+    },
+    {
+      "id": "P2-01",
+      "priority": 6,
+      "title": "电脑后端与电脑浏览器真实验收",
+      "status": "completed",
+      "passes": true,
+      "acceptance": [
+        "桌面快捷方式和项目根入口启动唯一 v0.3 电脑演示",
+        "电脑浏览器真实 TikTok 链路、任务轮询、结果与证据入口可用",
+        "电脑浏览器控制台、请求、核心按钮、溢出和遮挡无未解释错误",
+        "验收证据对应当前代码文件哈希，付费内容模式和停用开关均有明确运行状态"
+      ],
+      "evidence": [
+        "桌面快捷方式 C:\\Users\\Administrator\\Desktop\\项目024_自媒体通关搭档.lnk 已指向项目根 .cmd；冷启动后健康接口返回 0.3.0，服务仅监听 127.0.0.1:8792",
+        "电脑专用 Playwright 真实验收 91/91；真实 TikTok 采集、local_asr 字幕、任务分析、登记样本完整稿、6 段拍摄表、发布前审核和证据展开均通过",
+        "控制台错误、页面错误、请求失败、异常响应、横向溢出和控件重叠均为 0；证据位于 产出\\验真\\p2_desktop_acceptance_20260811_r2",
+        "历史零付费验收确认 paid_content_enabled=false 时不调用模型；用户最新决定将默认入口切换为付费模式，并保留 -DisablePaidContent 开关",
+        "入口重复启动复用同一 PID，不创建第二个 8792 服务"
+      ]
+    },
+    {
+      "id": "P2-02",
+      "priority": 7,
+      "title": "单一活动版本收敛",
+      "status": "pending",
+      "passes": false,
+      "acceptance": [
+        "项目根目录只有一个甲方演示入口",
+        "活动文档、代码和验收证据指向同一版本",
+        "旧入口和旧交付包按用户确认的归档方案处理"
+      ],
+      "evidence": [
+        "项目根目录只有一个甲方 .cmd 入口及其薄 PowerShell 路由；运行时当前只监听 8792",
+        "桌面同名快捷方式已改为启动当前 v0.3 电脑演示；仍存在带 run.ps1 的 v0.2 历史交付目录，归档或删除需用户另行确认"
+      ]
+    },
+    {
+      "id": "P2-03",
+      "priority": 8,
+      "title": "手机浏览器真实验收（延期）",
+      "status": "deferred",
+      "passes": false,
+      "acceptance": [
+        "真实手机可打开电脑演示入口并提交链接",
+        "手机端任务轮询、结果和证据入口无网络错误"
+      ],
+      "evidence": [
+        "用户明确要求本轮先完成电脑端，手机端暂不纳入验收",
+        "后续手机验收必须使用真实设备；390px Playwright 模拟不能替代真实手机证据"
+      ]
+    },
+    {
+      "id": "P2-04",
+      "priority": 9,
+      "title": "抖音公开单链接采集与电脑端验收",
+      "status": "completed",
+      "passes": true,
+      "acceptance": [
+        "真实抖音短链能够自动取得公开元数据、媒体、音轨和带时间码字幕",
+        "抖音任务沿用隔离 Worker、精简清单、完成缓存和自动分析链路",
+        "证据不保留个人登录态、Provider 完整响应、媒体签名 URL 或分享查询参数",
+        "不设置视频时长上限，并用超过 27 分钟的真实视频完成验收",
+        "电脑浏览器主路径、证据入口、付费完整内容生成、发布前审核和页面诊断通过"
+      ],
+      "evidence": [
+        "真实短链 https://v.douyin.com/o0Ow5GQ_9BA/ 完成任务 acq_20260810T212817Z_cc9225c27116，对应作品 7670900617237286186",
+        "35.015 秒 H.264 1440×1080 + AAC 媒体通过 ffprobe；large-v3-turbo 使用 cuda/int8_float16 生成 238 字符、5 段字幕",
+        "5 个白名单产物大小和 SHA-256 与清单逐项一致；标准作品 URL 无 share_sign、did/iid、Cookie 或请求头",
+        "视频时长上限及对应 needs_input 分支已删除；1621.9 秒模拟测试覆盖抖音与 TikTok",
+        "原失败短链 https://v.douyin.com/n0JnmW4HmME/ 完成任务 acq_20260810T221919Z_a63251b7b033；1621.967 秒、264153694 字节媒体完成 GPU 转写，生成 10851 字符、1185 段字幕",
+        "Python 全量回归 50/50、compileall、JavaScript 语法检查和 pip check 通过",
+        "长视频电脑 Playwright 验收 92/92，控制台、页面、请求、响应、溢出、裁切和控件重叠诊断均为 0；证据位于 产出\\验真\\p2_douyin_long_video_acceptance_20260811_r1",
+        "默认付费模式页面真实请求 analysis_mode=full，deepseek-chat 使用 8536 tokens，返回 267 字完整研究稿和 10 段拍摄表；17/17 通过，证据位于 产出\\验真\\p2_paid_full_acceptance_20260811_r2",
+        "用户可见术语已统一为发布前审核；内部 risk_gate 仅保留为 API 兼容字段"
+      ]
+    },
+    {
+      "id": "P2-05",
+      "priority": 10,
+      "title": "抖音公开采集抗故障回退与持续验收",
+      "status": "completed",
+      "passes": true,
+      "acceptance": [
+        "公共 Provider 暂时失效时，已确认的公开作品能够通过隔离浏览器取得目标媒体",
+        "同一作品更换抖音短链仍能命中稳定作品号完成缓存",
+        "回退不读取或导出用户 Cookie、浏览器配置或个人登录态，临时媒体地址不进入证据文件",
+        "Provider 故障与无效/受限链接返回不同的用户可见边界",
+        "真实页面提交分享文案、媒体、GPU 字幕、清单和分析入口通过，终态轮询停止"
+      ],
+      "evidence": [
+        "截图短链 vgp9oxHDfmQ 经公开重定向得到作品 7670900617237286186；抖音作品页 HTTP 200，douyin.wtf 作品号接口 HTTP 200 而视频数据接口 HTTP 400，确认故障在 Provider 取媒体阶段",
+        "强制刷新任务 acq_20260811T183937Z_db43f4ceb207 通过 douyin_public_ephemeral_browser 完成媒体 1675042 字节、ffprobe 35.015 秒和本机 large-v3-turbo cuda/int8_float16 字幕；5 个白名单产物大小与 SHA-256 匹配",
+        "同短链普通提交命中 acq_20260811T183937Z_db43f4ceb207，cache_hit=true；稳定作品号为 7670900617237286186",
+        "产出\\验真\\p2_douyin_resilience_20260812\\browser-results.json 全通过；控制台、页面异常、失败请求和异常响应均为 0，终态任务 GET 轮询次数为 0",
+        "Python 回归 53/53、compileall、pip check、JavaScript 语法检查和 PowerShell 语法检查通过"
+      ]
+    },
+    {
+      "id": "P2-06",
+      "priority": 11,
+      "title": "抖音分离音视频流合并与失败恢复",
+      "status": "completed",
+      "passes": true,
+      "acceptance": [
+        "隔离浏览器能区分抖音的独立视频流与独立音频流，并按完整响应长度选择目标流",
+        "分离流下载后先合并为同时含画面和声音的 MP4，再提取本地 ASR 音轨",
+        "已识别作品号但后续失败时保留短链映射，短链过期后可在本机恢复并重试",
+        "临时视频和音频签名地址不写入元数据、清单或 Worker 日志",
+        "真实失败作品完成媒体、GPU 字幕、完整内容生成和电脑页面验收"
+      ],
+      "evidence": [
+        "失败任务 acq_20260811T191002Z_76ada6348abb 的 41701827 字节 MP4 经 ffprobe 仅含 H.264 视频流，确认原音轨错误来自抖音分离音视频传输",
+        "完成任务 acq_20260811T193824Z_7db32edfd251 对应作品 7672257862206377216；合并媒体 32476674 字节、255.485 秒，含 H.264 1280×720 视频和 AAC 44.1 kHz 双声道音频",
+        "本机 large-v3-turbo 使用 cuda/int8_float16 生成 1652 字符、149 段字幕；5 个白名单产物的大小和 SHA-256 全部匹配",
+        "DeepSeek deepseek-chat 真实完整解读耗时 20.38 秒，generation_status=completed_research_draft、paid_api_called=true，生成 9 行拍摄表并保留 publishable=false",
+        "产出\\验真\\p2_douyin_split_av_20260812\\browser-results.json 全通过；完成缓存、报告渲染、终态停止轮询及控制台/页面/请求诊断均通过",
+        "Python 回归 55/55、compileall、pip check、JavaScript、浏览器探测脚本和 PowerShell 语法检查通过"
+      ]
+    }
+  ]
+}

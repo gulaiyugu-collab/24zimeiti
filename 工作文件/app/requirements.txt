@@ -1,0 +1,8 @@
+fastapi>=0.115,<1.0
+faster-whisper>=1.2,<2.0
+httpx>=0.27,<1.0
+nvidia-cublas-cu12>=12.4,<13; platform_system == "Windows"
+nvidia-cudnn-cu12>=9,<10; platform_system == "Windows"
+python-multipart>=0.0.18,<1.0
+yt-dlp[default,curl-cffi]>=2026.6.9
+uvicorn[standard]>=0.32,<1.0

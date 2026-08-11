@@ -1,0 +1,284 @@
+{
+  "cases": {
+    "7648937896535264533": {
+      "aliases": [
+        "https://vt.tiktok.com/ZS4BJ6sVM/",
+        "https://www.tiktok.com/@miyahome7/video/7648937896535264533"
+      ],
+      "report": {
+        "report_schema_version": "0.1",
+        "report_id": "tiktok-7648937896535264533",
+        "title": "微型挖掘机三附件商品视频研究稿",
+        "source": {
+          "platform": "tiktok",
+          "url": "https://www.tiktok.com/@miyahome7/video/7648937896535264533",
+          "video_id": "7648937896535264533",
+          "author": {
+            "name": "Miya Home",
+            "handle": "@miyahome7"
+          },
+          "content": {
+            "title": "#miniaturwelt #rcexcavator #miniworld#ASMR",
+            "published_at": "2026-06-08T16:25:43+08:00",
+            "duration_seconds": 30,
+            "decoded_media_duration_seconds": 30.209,
+            "visible_product": "带破碎锤造型附件、挖斗和抓木夹的微型挖掘机",
+            "visible_operation": "成人手部明显参与操作；画面没有清楚证明脱手遥控"
+          },
+          "metrics": {
+            "views": 170679,
+            "views_display": "170,679",
+            "view_snapshots": [
+              {
+                "value": 170679,
+                "label": "公开元数据快照 A"
+              },
+              {
+                "value": 170700,
+                "label": "公开元数据快照 B"
+              }
+            ],
+            "view_snapshot_difference": 21,
+            "view_snapshot_note": "两路公开快照相差 21；缺少同口径采集时间，不解释为增长。",
+            "likes": 1132,
+            "comments": 50,
+            "favorites": 311,
+            "shares": 29
+          },
+          "public_comment_summary": {
+            "coverage": "partial_unstable_pagination",
+            "observed": [
+              "已取得内容以表情和低信息量短句为主。",
+              "未观察到明确的价格、购买链接、规格或物流咨询。"
+            ],
+            "cannot_determine": [
+              "全部独立评论内容",
+              "真实购买意愿",
+              "成交原因"
+            ]
+          },
+          "acquisition_mode": "reviewed_public_fixture",
+          "evidence": [
+            {
+              "type": "public_url",
+              "label": "用户提交的 TikTok 短链接",
+              "value": "https://vt.tiktok.com/ZS4BJ6sVM/",
+              "confidence": "submitted"
+            },
+            {
+              "type": "resolved_public_url",
+              "label": "已解析的 TikTok 规范链接",
+              "value": "https://www.tiktok.com/@miyahome7/video/7648937896535264533",
+              "confidence": "verified"
+            },
+            {
+              "type": "reviewed_media",
+              "label": "源视频完整解码与抽帧核验",
+              "value": "30.209 秒媒体；画面出现成人手部",
+              "confidence": "verified"
+            }
+          ],
+          "missing": [
+            "甲方商品正式名称、品牌、型号与 SKU",
+            "销售套装与三种附件是否随同一 SKU 提供",
+            "遥控功能、可控动作与遥控范围证明",
+            "尺寸、材质、电池、续航、适用年龄与安全资料",
+            "目标市场的价格、库存、物流、售后与购买入口",
+            "完整评论分页"
+          ]
+        },
+        "evidence_boundary": {
+          "level": "reviewed_public_fixture",
+          "label": "来源内容已核验，商品事实仍待甲方补充",
+          "facts": [
+            "画面主体是履带式微型挖掘机或工程车模型。",
+            "画面依次出现破碎锤造型附件、挖斗和抓木夹。",
+            "公开元数据记录作者、标题、发布时间、时长与互动快照。",
+            "成人手部明显参与操作。"
+          ],
+          "inferences": [
+            "该视频具有商品展示属性，三次任务用于展示附件与玩法。",
+            "ASMR 和微缩场景有助于停留，但不能证明购买或成交。"
+          ],
+          "customer_facts": [],
+          "pending": [
+            "商品是否真正支持遥控，以及能控制哪些动作。",
+            "破碎锤、挖斗和抓木夹是否属于同一 SKU 的标准配件。",
+            "商品规格、材质、电池、续航、适用年龄和安全认证。",
+            "目标国家、售价、库存、履约和购买入口。"
+          ]
+        },
+        "distillation": {
+          "positioning": "用三个微缩任务，在 30 秒内展示一台工程车模型的三种附件形态和多场景玩法。",
+          "repeatable_structure": [
+            "障碍出现",
+            "商品执行",
+            "结果完成",
+            "更换附件与场景"
+          ],
+          "observable_selling_points": [
+            "三种不同前端附件连续出现。",
+            "破、挖、抓均呈现动作开始和完成结果。",
+            "微缩场景和动作声提供观赏性与 ASMR 包装。"
+          ],
+          "conversion_gaps": [
+            "首屏没有明确说明商品与附件数量。",
+            "画面没有独立证明遥控功能。",
+            "缺少销售套装、规格、价格与购买路径。"
+          ]
+        },
+        "traffic_assessment": {
+          "observed": [
+            "两个公开快照分别为 170,679 和 170,700 次播放。",
+            "点赞 1,132、收藏 311、评论 50、分享 29。"
+          ],
+          "boundary": "互动数据只能证明公开传播与停留信号，不能证明销量、成交或爆款公式。"
+        },
+        "content_package": {
+          "positioning": "一台微型挖掘机，三种演示附件，三个全新任务。",
+          "original_angle": "保留多任务商品证明机制，改用附件总览、全新置景和条件性遥控证明，避免复刻原片。",
+          "hooks": [
+            "ONE MINI EXCAVATOR. 3 ATTACHMENTS.",
+            "BREAKER, BUCKET OR GRAPPLE?",
+            "3 MINI JOBS IN 30 SECONDS."
+          ],
+          "script": {
+            "title": "一台微型挖掘机，三种附件演示",
+            "duration_seconds": 30,
+            "segments": [
+              {
+                "time": "0-3 秒",
+                "purpose": "商品与钩子",
+                "voiceover": "一台微型挖掘机，能完成三种不同任务吗？",
+                "visual": "商品居中，三种实际用于演示的附件在两侧快速排开。",
+                "screen_text": "ONE MINI EXCAVATOR. / 3 ATTACHMENTS."
+              },
+              {
+                "time": "3-9.5 秒",
+                "purpose": "附件一证明",
+                "voiceover": "先用破碎锤造型附件清理入口碎石。",
+                "visual": "全新工地入口置景，展示障碍、动作和清理后的结果。",
+                "screen_text": "1 / BREAK"
+              },
+              {
+                "time": "9.5-16 秒",
+                "purpose": "附件二证明",
+                "voiceover": "再换挖斗，把彩色石料装进微型翻斗车。",
+                "visual": "展示挖取、抬升、落料和装载完成，不使用原片码头置景。",
+                "screen_text": "2 / SCOOP"
+              },
+              {
+                "time": "16-22.5 秒",
+                "purpose": "附件三证明",
+                "voiceover": "最后用抓木夹，把木料整齐搬上拖车。",
+                "visual": "全新堆料场景，展示夹紧、搬运和整齐落位。",
+                "screen_text": "3 / GRAB"
+              },
+              {
+                "time": "22.5-26.5 秒",
+                "purpose": "价值汇总",
+                "voiceover": "三种附件演示，三个微缩任务。",
+                "visual": "三个完成结果快速回放；只有遥控属实并有证明时才加入无手操作镜头。",
+                "screen_text": "3 JOBS. ONE BUILD."
+              },
+              {
+                "time": "26.5-30 秒",
+                "purpose": "互动与边界",
+                "voiceover": "你最想先试哪一种？评论 1、2 或 3。商品配置以已核验商品页为准。",
+                "visual": "商品定妆，仅摆放经甲方确认的真实随盒物品，尾帧停留至少 1 秒。",
+                "screen_text": "1, 2 OR 3?"
+              }
+            ],
+            "full_text": "一台微型挖掘机，能完成三种不同任务吗？先用破碎锤造型附件清理入口碎石，再换挖斗，把彩色石料装进微型翻斗车。最后用抓木夹，把木料整齐搬上拖车。三种附件演示，三个微缩任务。你最想先试哪一种？评论 1、2 或 3。商品配置以已核验商品页为准。"
+          },
+          "post_copy": {
+            "title_options": [
+              "One Mini Excavator, Three Attachment Demos",
+              "Breaker, Bucket or Grapple?",
+              "Three Mini Jobs. One Excavator."
+            ],
+            "body": "Three attachment demos. Three miniature jobs. Which one would you try first: breaker, bucket or grapple? Comment 1, 2 or 3. Product configuration must match the verified listing.",
+            "tags": [
+              "MiniExcavator",
+              "MiniatureWorld",
+              "ToyASMR",
+              "ToyCollector"
+            ]
+          },
+          "cta": {
+            "primary": "Comment 1, 2 or 3.",
+            "boundary": "只有商品页、库存和履约信息均核验后，才可添加购买型 CTA。"
+          },
+          "comment_replies": [
+            {
+              "question": "Is it remote controlled?",
+              "reply": "遥控属性尚待甲方证明；在确认具体型号和可控动作前不作声明。"
+            },
+            {
+              "question": "Are all three attachments included?",
+              "reply": "视频展示了三种附件，但销售套装尚未核验，请以确认后的商品页为准。"
+            }
+          ]
+        },
+        "risk_gate": {
+          "status": "needs_human_review",
+          "publishable": false,
+          "message": "来源视频已核验；商品事实、目标市场资料与人工终审完成前禁止发布。",
+          "hits": [
+            {
+              "level": "high",
+              "text": "#rcexcavator 与画面手部操作并存",
+              "reason": "来源标签不能单独证明商品真正支持遥控或具体遥控能力。",
+              "action": "甲方提供功能证明，并拍摄手离画面和遥控器同框的独立镜头。"
+            },
+            {
+              "level": "high",
+              "text": "三种附件均出现在来源视频",
+              "reason": "画面出现不等于同一 SKU 全部随盒提供。",
+              "action": "核对销售套装，尾帧只摆经确认的随盒物品。"
+            },
+            {
+              "level": "medium",
+              "text": "商品规格与目标市场资料缺失",
+              "reason": "无法核验材质、尺寸、安全、价格、库存、物流和购买入口。",
+              "action": "补齐甲方商品资料后重新进行发布前审核。"
+            }
+          ],
+          "blocked_phrases": [
+            "全功能遥控",
+            "全金属",
+            "大承重",
+            "全套三附件",
+            "儿童绝对安全",
+            "已经卖爆"
+          ],
+          "review_checklist": [
+            "核对商品正式名称、品牌、型号和 SKU。",
+            "核对销售套装与附件清单。",
+            "核对遥控功能、规格、电池、适用年龄和安全资料。",
+            "核对目标市场的价格、库存、物流、售后与购买入口。",
+            "完成素材、商标、音乐和商业内容披露审核。"
+          ],
+          "disclaimer": "本报告用于内容研究与创作辅助；公开互动数据不代表销量，商品事实以甲方可核验证据为准。"
+        },
+        "analysis_mode": "reviewed_public_fixture",
+        "audience_insights": {
+          "evidence_level": "low",
+          "observed": [
+            "评论样本以表情和低信息量短句为主。",
+            "未观察到明确的价格、链接、规格或物流问题。"
+          ],
+          "needs_hypotheses": [
+            "观众可能关注三种附件的玩法差异。",
+            "应主动测试遥控、附件清单、尺寸和续航等商品问题。"
+          ],
+          "cannot_determine": [
+            "具体人群和地区画像",
+            "真实购买意愿",
+            "商品点击、加购和成交原因"
+          ]
+        }
+      }
+    }
+  }
+}
