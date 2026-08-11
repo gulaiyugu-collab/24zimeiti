@@ -5,6 +5,7 @@ const elements = {
   urlInput: document.querySelector("#urlInput"),
   transcriptInput: document.querySelector("#transcriptInput"),
   productContextInput: document.querySelector("#productContextInput"),
+  productContextField: document.querySelector("#productContextField"),
   mediaFileInput: document.querySelector("#mediaFileInput"),
   mediaFileMeta: document.querySelector("#mediaFileMeta"),
   transcribeButton: document.querySelector("#transcribeButton"),
@@ -22,6 +23,8 @@ const elements = {
   resultArea: document.querySelector("#resultArea"),
   statePanel: document.querySelector("#statePanel"),
   reportLayout: document.querySelector("#reportLayout"),
+  productRelevance: document.querySelector("#productRelevance"),
+  requirementsSummary: document.querySelector("#requirementsSummary"),
   deliverySummary: document.querySelector("#deliverySummary"),
   recommendedDraft: document.querySelector("#recommendedDraft"),
   shootingPlan: document.querySelector("#shootingPlan"),
@@ -69,6 +72,7 @@ const LABELS = {
   value: "内容", facts: "事实", inferences: "推断", limitations: "限制", missing: "缺失资料",
   missing_fields: "缺失资料", warnings: "注意事项", signals: "判断依据", summary: "内容摘要",
   content: "作品内容", core_claim: "核心主张", central_idea: "核心观点", theme: "内容主题",
+  content_demonstration: "内容演示",
   topic: "内容主题", audience: "目标受众", audience_pains: "受众痛点", pain_points: "受众痛点",
   hook: "原内容钩子", hook_mechanism: "钩子机制", hook_analysis: "钩子拆解", structure: "内容结构",
   content_structure: "内容结构", key_points: "关键信息", persuasion: "说服路径", emotional_triggers: "情绪触发",
@@ -119,6 +123,12 @@ const LABELS = {
   transcript_status: "转写状态", product_verification: "商品核验状态", source_evidence: "来源证据",
   selected_provider: "已选择服务", provider_order: "服务选择顺序", external_api_preferred: "是否优先外部 API",
   paid_api_called: "是否调用付费 API", providers: "可用服务检查", configured: "是否已配置",
+  product_relevance: "商品属性", has_product: "是否具有商品属性", product_fields_applicable: "是否需要商品字段",
+  required_for: "资料使用阶段", follow_up: "后续建议", source: "判断来源",
+  rule_based_status: "规则初判", rule_based_confidence: "规则置信度", requirements: "资料盘点",
+  blocking_for_interpretation: "当前解读必需", optional_enhancements: "可选增强",
+  product_for_rewrite_or_publish: "商品改写或发布资料", interpretation_blocked_by_product: "是否阻塞普通解读",
+  conditional_missing_fields: "确认后可能需要", scope: "适用阶段",
   acquisition: "采集记录", job_id: "采集任务", manifest_url: "证据清单", completed_at: "采集完成时间",
   evidence_strength: "证据强度", source_artifact: "来源证据文件", sha256: "文件校验值",
   artifact_name: "证据文件", artifact_url: "证据入口", segment_count: "字幕分段数",
@@ -143,7 +153,12 @@ const VALUE_LABELS = {
   missing_or_incomplete: "缺失或不完整", user_supplied_unverified: "用户提供，尚未核验",
   submitted_needs_verification: "已提交，仍需核验", external_api: "外部 API", user_supplied_transcript: "用户提供的文字",
   not_needed: "无需转写", needs_media: "等待媒体文件", not_configured: "尚未配置",
-  runtime_public_snapshot: "本次运行时公开采集", reviewed_fixture: "预先审阅样本"
+  runtime_public_snapshot: "本次运行时公开采集", reviewed_fixture: "预先审阅样本",
+  has_product: "具有商品属性", no_product: "无商品属性", needs_confirmation: "商品属性待确认",
+  rule_based: "规则初判", model: "模型判断", user_confirmation: "用户确认", client_product_input: "用户商品资料",
+  rule_based_with_model_note: "规则优先，保留模型建议",
+  product_rewrite_or_publish_only: "仅商品改写或正式发布时",
+  not_applicable: "不适用"
 };
 
 const SCRIPT_KEYS = new Set([
@@ -162,6 +177,9 @@ let paidContentEnabled = false;
 let requestedAnalysisMode = "quick";
 let analysisProgressLabel = "";
 let previousGateStates = ["locked", "locked", "locked", "locked"];
+let productRelevanceOverride = null;
+let currentProductRelevance = null;
+let currentProductRequirements = null;
 
 const MAX_MEDIA_BYTES = 25 * 1024 * 1024;
 const ACQUISITION_POLL_INTERVAL_MS = 1400;
@@ -423,6 +441,189 @@ function renderReportSection(container, title, intro, data) {
   if (Array.isArray(data)) section.appendChild(renderArray(data));
   else if (typeof data === "object" && data !== null) section.appendChild(renderObject(data));
   else section.appendChild(renderPrimitive(data));
+  container.appendChild(section);
+}
+
+function renderCollapsibleReportSection(container, title, intro, data, summaryData = {}) {
+  clearNode(container);
+  if (!isPresent(data)) return;
+  const section = createElement("section", "report-section");
+  section.appendChild(createElement("h3", "", title));
+  if (intro) section.appendChild(createElement("p", "section-intro", intro));
+  if (isPresent(summaryData)) section.appendChild(renderObject(summaryData));
+  section.appendChild(renderCollapsible("查看详细资料", data));
+  container.appendChild(section);
+}
+
+function setProductContextVisibility(status) {
+  if (!elements.productContextField) return;
+  elements.productContextField.hidden = ["no_product", "needs_confirmation"].includes(status);
+}
+
+function confirmedProductRelevance(status) {
+  const hasProduct = status === "has_product";
+  return {
+    status,
+    has_product: hasProduct,
+    confidence: "high",
+    evidence: ["用户已在当前页面确认商品属性。"],
+    reason: hasProduct
+      ? "按用户确认，将商品资料用于后续改写或发布准备。"
+      : "按用户确认，这条内容不按商品内容处理。",
+    follow_up: hasProduct
+      ? ["如需改写成自己的商品内容或正式发布，再补充可核验的商品事实。"]
+      : ["继续按内容主题和方法解读，无需补商品资料。"],
+    source: "user_confirmation"
+  };
+}
+
+function applyProductRelevanceOverride(status) {
+  productRelevanceOverride = status;
+  currentProductRelevance = confirmedProductRelevance(status);
+  const previous = currentProductRequirements || {};
+  const conditional = Array.isArray(previous.conditional_missing_fields)
+    ? previous.conditional_missing_fields
+    : [];
+  currentProductRequirements = {
+    ...previous,
+    status: status === "has_product" ? (conditional.length ? "needs_input" : "submitted_needs_verification") : "not_applicable",
+    missing_fields: status === "has_product" ? conditional : [],
+    conditional_missing_fields: []
+  };
+  renderProductRelevance(
+    elements.productRelevance,
+    currentProductRelevance,
+    currentProductRequirements
+  );
+  setProductContextVisibility(status);
+  if (status === "has_product") {
+    elements.supplementDetails.open = true;
+    elements.productContextInput.focus();
+    showFormMessage("已确认是商品内容；商品资料只在改写或正式发布时使用。");
+  } else {
+    showFormMessage("已确认不是商品内容；普通解读不再要求商品资料。");
+  }
+  showToast("商品属性已记录", "ok");
+}
+
+function renderProductRelevance(container, relevance, requirements) {
+  clearNode(container);
+  if (!relevance || typeof relevance !== "object") {
+    container.hidden = true;
+    setProductContextVisibility(null);
+    return;
+  }
+  const status = String(relevance.status || "needs_confirmation");
+  const statusMeta = {
+    has_product: { label: "具有商品属性", tone: "has" },
+    no_product: { label: "无商品属性", tone: "none" },
+    needs_confirmation: { label: "商品属性待确认", tone: "pending" }
+  }[status] || { label: "商品属性待确认", tone: "pending" };
+
+  container.hidden = false;
+  container.className = "product-relevance product-relevance--" + statusMeta.tone;
+  const heading = createElement("div", "product-relevance__heading");
+  const titleWrap = createElement("div");
+  titleWrap.appendChild(createElement("p", "eyebrow", "商品属性"));
+  const title = createElement("h2", "", "这条内容是否在讲商品");
+  title.id = "productRelevanceTitle";
+  titleWrap.appendChild(title);
+  heading.appendChild(titleWrap);
+  heading.appendChild(createElement("span", "product-relevance__status", statusMeta.label));
+  container.appendChild(heading);
+
+  const body = createElement("div", "product-relevance__body");
+  body.appendChild(createElement("p", "product-relevance__reason", relevance.reason || "当前证据不足，先保留待确认。"));
+
+  const evidence = Array.isArray(relevance.evidence) ? relevance.evidence.filter(Boolean) : [];
+  if (evidence.length) {
+    const group = createElement("div", "product-relevance__group");
+    group.appendChild(createElement("h3", "", "判断依据"));
+    const list = createElement("ul", "report-list");
+    evidence.forEach((item) => list.appendChild(createElement("li", "", textValue(item))));
+    group.appendChild(list);
+    body.appendChild(group);
+  }
+
+  const followUp = Array.isArray(relevance.follow_up) ? relevance.follow_up.filter(Boolean) : [];
+  if (followUp.length) {
+    const group = createElement("div", "product-relevance__group");
+    group.appendChild(createElement("h3", "", "后续意见"));
+    const list = createElement("ul", "report-list");
+    followUp.forEach((item) => list.appendChild(createElement("li", "", textValue(item))));
+    group.appendChild(list);
+    body.appendChild(group);
+  }
+
+  if (status === "has_product") {
+    const missing = Array.isArray(requirements?.missing_fields)
+      ? requirements.missing_fields.filter(Boolean)
+      : [];
+    if (missing.length) {
+      const group = createElement("div", "product-relevance__group product-relevance__group--requirements");
+      group.appendChild(createElement("h3", "", "改写或正式发布前再补"));
+      const list = createElement("ul", "report-list");
+      missing.forEach((item) => list.appendChild(createElement("li", "", textValue(item))));
+      group.appendChild(list);
+      body.appendChild(group);
+    }
+  } else if (status === "no_product") {
+    body.appendChild(createElement("p", "product-relevance__not-applicable", "不需要商品名称、核心卖点、规格或证明材料。"));
+  } else {
+    const actions = createElement("div", "product-relevance__actions");
+    const confirmProduct = createElement("button", "button button--secondary", "这是商品内容");
+    confirmProduct.type = "button";
+    confirmProduct.addEventListener("click", () => applyProductRelevanceOverride("has_product"));
+    const confirmNoProduct = createElement("button", "button button--secondary", "不是商品内容");
+    confirmNoProduct.type = "button";
+    confirmNoProduct.addEventListener("click", () => applyProductRelevanceOverride("no_product"));
+    actions.append(confirmProduct, confirmNoProduct);
+    body.appendChild(actions);
+  }
+  container.appendChild(body);
+  setProductContextVisibility(status);
+}
+
+function appendRequirementGroup(container, title, items, emptyText = "") {
+  const group = createElement("section", "requirements-summary__group");
+  group.appendChild(createElement("h4", "", title));
+  if (Array.isArray(items) && items.length) {
+    const list = createElement("ul", "report-list");
+    items.forEach((item) => list.appendChild(createElement("li", "", textValue(item))));
+    group.appendChild(list);
+  } else if (emptyText) {
+    group.appendChild(createElement("p", "requirements-summary__empty", emptyText));
+  }
+  container.appendChild(group);
+}
+
+function renderRequirementsSummary(container, requirements, productRelevance) {
+  clearNode(container);
+  if (!requirements || typeof requirements !== "object") return;
+  const section = createElement("section", "requirements-summary");
+  section.appendChild(createElement("h3", "", "资料盘点"));
+  const grid = createElement("div", "requirements-summary__grid");
+  appendRequirementGroup(
+    grid,
+    "当前解读必需",
+    requirements.blocking_for_interpretation,
+    "当前解读没有必补资料。"
+  );
+  appendRequirementGroup(
+    grid,
+    "可选增强",
+    requirements.optional_enhancements,
+    "当前没有额外增强项。"
+  );
+  if (productRelevance?.status === "has_product") {
+    appendRequirementGroup(
+      grid,
+      "商品改写或发布",
+      requirements.product_for_rewrite_or_publish,
+      "商品资料已提交，发布前仍需人工核验。"
+    );
+  }
+  section.appendChild(grid);
   container.appendChild(section);
 }
 
@@ -858,6 +1059,11 @@ function updateMediaSelection() {
 
 function resetReportActions() {
   currentScript = "";
+  currentProductRelevance = null;
+  currentProductRequirements = null;
+  clearNode(elements.productRelevance);
+  elements.productRelevance.hidden = true;
+  clearNode(elements.requirementsSummary);
   elements.copyScriptButton.hidden = true;
   elements.copyScriptButton.textContent = "复制研究稿";
   elements.sourceLink.hidden = true;
@@ -987,11 +1193,18 @@ function showCompleted(payload, partial = false) {
   const audience = report.audience_insights || payload.audience_insights || {};
   const content = report.content_package || payload.content_package || {};
   const risks = report.compliance || report.risk_review || report.risk_gate || payload.compliance || payload.risk_review || {};
+  const productRelevance = report.product_relevance || payload.product_relevance || null;
+  const productRequirements = report.product_requirements || payload.product_requirements || null;
+  const requirements = report.requirements || payload.requirements || null;
   const publishState = assessPublishability(payload, report, partial);
 
   elements.resultArea.hidden = false;
   elements.reportLayout.hidden = false;
   clearNode(elements.statePanel);
+  currentProductRelevance = productRelevance;
+  currentProductRequirements = productRequirements;
+  renderProductRelevance(elements.productRelevance, productRelevance, productRequirements);
+  renderRequirementsSummary(elements.requirementsSummary, requirements, productRelevance);
 
   if (payload.message && !isPresent(report.quick_result)) {
     const tone = partial ? "warning" : "info";
@@ -1017,7 +1230,14 @@ function showCompleted(payload, partial = false) {
 
   renderSourceSummary(elements.sourceSummary, source);
   renderSideSection(elements.qualitySummary, "证据边界", report.evidence_boundary || report.data_quality || payload.evidence_boundary || payload.data_quality || {});
-  renderSideSection(elements.asrSummary, "语音转写", asr);
+  const asrDetails = objectWithout(asr, ["status", "mode", "selected_provider", "provider", "model", "language", "message", "paid_api_called", "media_required"]);
+  const asrOverview = objectWithout(asr, Object.keys(asrDetails));
+  renderSideSection(elements.asrSummary, "语音转写", asrOverview);
+  if (isPresent(asrDetails)) {
+    elements.asrSummary.querySelector(".side-section")?.appendChild(
+      renderCollapsible("查看转写详情", asrDetails)
+    );
+  }
 
   if (isPresent(distillation)) {
     renderReportSection(elements.distillationReport, "内容蒸馏", "区分原始信息、推断和可迁移的方法。", distillation);
@@ -1027,24 +1247,47 @@ function showCompleted(payload, partial = false) {
   renderReportSection(elements.trafficAssessment, "流量判断", "基于当前证据解释潜力与限制，不承诺实际播放结果。", traffic);
   renderReportSection(elements.calibrationPlan, "验证计划", "把发布前判断变成可追踪、可推翻、可复盘的实验。", calibration);
   renderReportSection(elements.audienceInsights, "受众洞察", "用于校准表达角度、顾虑回应和行动动机。", audience);
-  renderReportSection(elements.localizationSummary, "地区本地化", "v0.2 仅展示预留状态，不据此改写内容。", localization);
+  renderReportSection(
+    elements.localizationSummary,
+    "地区本地化",
+    "v0.2 仅展示预留状态，不据此改写内容。",
+    objectWithout(localization, ["requested"])
+  );
 
-  const productRequirements = report.product_requirements || payload.product_requirements;
-  const evidenceDetail = evidenceRisk && typeof evidenceRisk === "object" && !Array.isArray(evidenceRisk)
-    ? { ...evidenceRisk, ...(isPresent(productRequirements) ? { product_requirements: productRequirements } : {}) }
-    : evidenceRisk;
-  renderReportSection(elements.evidenceRisks, "证据与发布前审核", "商品事实、来源证据与人工审核共同决定是否可发布。", evidenceDetail);
+  const evidenceDetail = evidenceRisk;
+  const riskGateSummary = evidenceRisk?.risk_gate && typeof evidenceRisk.risk_gate === "object"
+    ? objectWithout(evidenceRisk.risk_gate, ["hits", "review_checklist", "blocked_phrases"])
+    : {};
+  const evidenceSummary = {
+    transcript_status: evidenceRisk?.transcript_status,
+    product_verification: evidenceRisk?.product_verification,
+    ...(isPresent(riskGateSummary) ? { risk_gate: riskGateSummary } : {})
+  };
+  renderCollapsibleReportSection(
+    elements.evidenceRisks,
+    "证据与发布前审核",
+    productRelevance?.status === "has_product"
+      ? "商品事实、来源证据与人工审核共同决定是否可发布。"
+      : "来源证据与人工审核共同决定是否可发布。",
+    evidenceDetail,
+    evidenceSummary
+  );
   renderReportSection(elements.riskReview, "风险审阅", "健康与产品相关表达需结合实际资质和平台规则复核。", isPresent(evidenceRisk) ? {} : risks);
 
   const handledKeys = new Set([
     "report_schema_version", "report_id", "title", "source", "evidence_boundary", "data_quality", "delivery",
     "quick_result", "recommended_script", "recommended_draft", "shooting_table", "shooting_plan",
-    "publishing_package", "localization", "product_requirements", "evidence_and_risk", "evidence_and_risks",
+    "publishing_package", "localization", "product_relevance", "product_requirements", "requirements", "evidence_and_risk", "evidence_and_risks",
     "asr", "distillation", "traffic_assessment", "calibration", "audience_insights", "content_package",
     "compliance", "risk_review", "risk_gate", "material", "analysis_mode", "legacy_report_schema_version"
   ]);
   const additional = Object.fromEntries(Object.entries(report).filter(([key, value]) => !handledKeys.has(key) && isPresent(value)));
-  renderReportSection(elements.additionalReport, "补充分析", "兼容展示报告中的其他有效字段。", additional);
+  renderCollapsibleReportSection(
+    elements.additionalReport,
+    "补充分析",
+    "兼容展示报告中的其他有效字段。",
+    additional
+  );
 
   currentScript = isPresent(recommended) ? findScript(recommended, "recommended_script") : findScript(content);
   elements.copyScriptButton.hidden = !currentScript;
@@ -1173,7 +1416,8 @@ async function acquireAndAnalyze(body) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         analysis_mode: body.analysis_mode,
-        product_context: body.product_context || null
+        product_context: body.product_context || null,
+        product_relevance_override: body.product_relevance_override || null
       })
     },
     "采集结果进入内容分析失败。"
@@ -1244,6 +1488,7 @@ async function submitAnalysis(event) {
     analysis_mode: requestedAnalysisMode,
     transcript: elements.transcriptInput.value.trim(),
     product_context: elements.productContextInput.value.trim(),
+    product_relevance_override: productRelevanceOverride,
     asr: { mode: elements.asrStrategySelect.value || "auto" }
   };
 
@@ -1328,6 +1573,10 @@ async function loadDemoSample(fill = false) {
 
 function fillDemoSample() {
   if (!demoSample?.url) return;
+  productRelevanceOverride = null;
+  currentProductRelevance = null;
+  currentProductRequirements = null;
+  setProductContextVisibility(null);
   elements.urlInput.value = demoSample.url;
   elements.urlInput.removeAttribute("aria-invalid");
   elements.urlError.textContent = "";
@@ -1392,8 +1641,19 @@ function openScriptFlow() {
   requestedAnalysisMode = "full";
   elements.supplementDetails.open = true;
   elements.analyzeLabel.textContent = "生成完整脚本";
-  showFormMessage("补充字幕和商品事实后，点击“生成完整脚本”。");
-  elements.productContextInput.focus();
+  const status = currentProductRelevance?.status;
+  if (status === "no_product") {
+    showFormMessage("这条内容无需商品资料；核对字幕后即可生成完整脚本。");
+    if (!elements.transcriptInput.value.trim()) elements.transcriptInput.focus();
+    else elements.analyzeButton.focus();
+  } else if (status === "needs_confirmation") {
+    showFormMessage("先确认上方商品属性；普通解读不会被商品资料阻塞。");
+    elements.productRelevance.scrollIntoView({ behavior: "smooth", block: "center" });
+    return;
+  } else {
+    showFormMessage("商品资料只在改写或正式发布时使用；补充后点击“生成完整脚本”。");
+    elements.productContextInput.focus();
+  }
   elements.supplementDetails.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
@@ -1408,6 +1668,10 @@ elements.pathway.querySelectorAll(".gate").forEach((gate) => {
   gate.addEventListener("click", () => navigateToGate(gate));
 });
 elements.urlInput.addEventListener("input", () => {
+  productRelevanceOverride = null;
+  currentProductRelevance = null;
+  currentProductRequirements = null;
+  setProductContextVisibility(null);
   elements.urlInput.removeAttribute("aria-invalid");
   elements.urlError.textContent = "";
 });

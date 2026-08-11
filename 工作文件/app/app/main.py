@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import importlib.util
+import json
 from copy import deepcopy
 from pathlib import Path
 from typing import Any, cast
@@ -41,6 +42,10 @@ from app.services import (
     ContentGenerationError,
     ContentGenerationResult,
     ContentGenerationRouter,
+    build_product_requirements,
+    infer_product_relevance,
+    is_optional_enhancement,
+    merge_product_relevance,
 )
 
 
@@ -228,35 +233,164 @@ def _localization_state(payload: AnalyzeRequest | None) -> dict[str, Any]:
     }
 
 
-def _product_requirements(payload: AnalyzeRequest | None) -> dict[str, Any]:
-    product = payload.product if payload else None
-    legacy_context = payload.product_context if payload else None
-    structured = product.model_dump(mode="json", exclude_none=True) if product else None
+_PRODUCT_GAP_MARKERS = (
+    "商品",
+    "产品",
+    "客户产品",
+    "品牌",
+    "型号",
+    "sku",
+    "规格",
+    "参数",
+    "卖点",
+    "资质",
+    "宣传表述",
+    "证明材料",
+    "附件",
+    "遥控",
+    "售价",
+    "价格",
+    "库存",
+    "物流",
+    "售后",
+    "套装",
+)
 
-    missing: list[str] = []
-    if not product or not (product.name or product.sku):
-        missing.append("商品名称或 SKU")
-    if not product or not product.category:
-        missing.append("商品品类")
-    if not product or not product.selling_points:
-        missing.append("商品核心卖点")
-    if not product or not product.specifications:
-        missing.append("商品规格参数")
-    if not product or not product.approved_claims:
-        missing.append("甲方批准使用的宣传表述")
-    if not product or not product.evidence_urls:
-        missing.append("商品证明材料")
 
+def _product_relevance(
+    payload: AnalyzeRequest | None,
+    *,
+    source_material: Any = None,
+    transcript: str | None = None,
+) -> dict[str, Any]:
+    if payload is None:
+        return infer_product_relevance(
+            transcript=transcript,
+            source_material=source_material,
+        )
+    return infer_product_relevance(
+        transcript=transcript if transcript is not None else payload.transcript,
+        product_context=payload.product_context,
+        product=payload.product,
+        source_material=source_material,
+        override=payload.product_relevance_override,
+    )
+
+
+def _product_requirements(
+    payload: AnalyzeRequest | None,
+    relevance: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    if payload is None:
+        return build_product_requirements(relevance=relevance)
+    return build_product_requirements(
+        product=payload.product,
+        product_context=payload.product_context,
+        relevance=relevance,
+    )
+
+
+def _is_product_gap(value: Any) -> bool:
+    text = str(value or "").lower()
+    return any(marker.casefold() in text for marker in _PRODUCT_GAP_MARKERS)
+
+
+def _optional_enhancements(
+    source: dict[str, Any] | None = None,
+    extra: list[Any] | None = None,
+) -> list[str]:
+    source = source if isinstance(source, dict) else {}
+    optional: list[str] = []
+    metrics = source.get("metrics")
+    metrics_ready = isinstance(metrics, dict) and any(
+        metrics.get(key) is not None and metrics.get(key) != ""
+        for key in ("views", "likes", "comments", "favorites", "shares")
+    )
+    if not metrics_ready:
+        optional.append("实时公开指标")
+
+    comment_summary = source.get("public_comment_summary")
+    raw_comments = (
+        isinstance(comment_summary, dict)
+        and comment_summary.get("raw_comments_included") is True
+    )
+    if not raw_comments:
+        optional.append("公开评论原文")
+
+    evidence = source.get("evidence")
+    evidence_text = json.dumps(evidence, ensure_ascii=False) if evidence else ""
+    if not any(marker in evidence_text.lower() for marker in ("ocr", "镜头结构")):
+        optional.append("画面 OCR 与镜头结构分析")
+
+    for item in extra or []:
+        value = str(item).strip()
+        if value and is_optional_enhancement(value):
+            optional.append(
+                "公开评论原文" if "评论" in value else
+                "画面 OCR 与镜头结构分析" if "ocr" in value.lower() or "镜头结构" in value
+                else "实时公开指标"
+            )
+    return list(dict.fromkeys(optional))
+
+
+def _requirements_snapshot(
+    *,
+    product_relevance: dict[str, Any],
+    product_requirements: dict[str, Any],
+    blocking: list[Any] | None = None,
+    optional: list[Any] | None = None,
+    distillation_complete: bool = False,
+) -> dict[str, Any]:
+    blocking_items = [
+        str(item).strip()
+        for item in (blocking or [])
+        if str(item).strip()
+    ]
+    if distillation_complete:
+        blocking_items = [
+            item for item in blocking_items if item != "经模型或人工完成的内容蒸馏"
+        ]
+    status = str(product_relevance.get("status") or "needs_confirmation")
+    product_publish_fields = (
+        list(product_requirements.get("missing_fields", []))
+        if status == "has_product"
+        else []
+    )
     return {
-        "status": "needs_input" if missing else "submitted_needs_verification",
-        "submitted": {
-            "legacy_context": legacy_context,
-            "structured": structured,
-        },
-        "verification_status": "unverified_user_submission" if product or legacy_context else "missing",
-        "missing_fields": missing,
-        "placeholder_policy": "缺失项保留占位符，不得推断为商品事实。",
+        "blocking_for_interpretation": list(dict.fromkeys(blocking_items)),
+        "optional_enhancements": list(dict.fromkeys(str(item) for item in (optional or []))),
+        "product_for_rewrite_or_publish": product_publish_fields,
+        "product_status": status,
+        "interpretation_blocked_by_product": False,
     }
+
+
+def _sync_requirement_fields(
+    report: dict[str, Any],
+    *,
+    product_relevance: dict[str, Any],
+    product_requirements: dict[str, Any],
+    blocking: list[Any] | None = None,
+    optional: list[Any] | None = None,
+    distillation_complete: bool = False,
+) -> None:
+    report["product_relevance"] = product_relevance
+    report["product_requirements"] = product_requirements
+    report["requirements"] = _requirements_snapshot(
+        product_relevance=product_relevance,
+        product_requirements=product_requirements,
+        blocking=blocking,
+        optional=optional,
+        distillation_complete=distillation_complete,
+    )
+    evidence_and_risk = report.get("evidence_and_risk")
+    if isinstance(evidence_and_risk, dict):
+        evidence_and_risk["product_verification"] = product_requirements.get(
+            "verification_status"
+        )
+    material = report.get("material")
+    if isinstance(material, dict):
+        material["product_relevance_status"] = product_relevance.get("status")
 
 
 def _asr_state(payload: AnalyzeRequest | None, transcript_supplied: bool) -> dict[str, Any]:
@@ -264,26 +398,34 @@ def _asr_state(payload: AnalyzeRequest | None, transcript_supplied: bool) -> dic
     return asr_router.plan(mode=mode, transcript_supplied=transcript_supplied)
 
 
-def _shooting_table_from_fixture(report: dict[str, Any]) -> dict[str, Any]:
+def _shooting_table_from_fixture(
+    report: dict[str, Any],
+    product_relevance: dict[str, Any],
+) -> dict[str, Any]:
     script = report.get("content_package", {}).get("script", {})
+    has_product = product_relevance.get("status") == "has_product"
     rows = []
     for segment in script.get("segments", []):
-        rows.append(
-            {
-                "time": segment.get("time"),
-                "visual": segment.get("visual"),
-                "voiceover": segment.get("voiceover"),
-                "subtitle": segment.get("screen_text"),
-                "product_proof": "[待补：该镜头对应的商品事实或证明材料]",
-                "sound": "[待定：现场声、配乐或音效]",
-                "purpose": segment.get("purpose"),
-            }
-        )
+        row = {
+            "time": segment.get("time"),
+            "visual": segment.get("visual"),
+            "voiceover": segment.get("voiceover"),
+            "subtitle": segment.get("screen_text"),
+            "sound": "[待定：现场声、配乐或音效]",
+            "purpose": segment.get("purpose"),
+        }
+        if has_product:
+            row["product_proof"] = "[待补：该镜头对应的商品事实或证明材料]"
+        rows.append(row)
+    columns = ["time", "visual", "voiceover", "subtitle"]
+    if has_product:
+        columns.append("product_proof")
+    columns.append("sound")
     return {
         "status": "research_draft",
-        "columns": ["time", "visual", "voiceover", "subtitle", "product_proof", "sound"],
+        "columns": columns,
         "rows": rows,
-        "missing_fields": ["product_proof", "sound"],
+        "missing_fields": ["product_proof", "sound"] if has_product else ["sound"],
     }
 
 
@@ -336,19 +478,84 @@ def _fixture_report_v02(
     payload: AnalyzeRequest | None,
 ) -> dict[str, Any]:
     legacy = deepcopy(original_report)
+    legacy_source = legacy.get("source", {})
+    legacy_boundary = legacy.get("evidence_boundary")
+    boundary_signals = (
+        {
+            "facts": legacy_boundary.get("facts", []),
+            "inferences": legacy_boundary.get("inferences", []),
+        }
+        if isinstance(legacy_boundary, dict)
+        else None
+    )
+    source_material = {
+        "title": legacy.get("title"),
+        "content": legacy_source.get("content") if isinstance(legacy_source, dict) else None,
+        "public_comment_summary": (
+            legacy_source.get("public_comment_summary")
+            if isinstance(legacy_source, dict)
+            else None
+        ),
+        "evidence_boundary": boundary_signals,
+    }
+    product_relevance = _product_relevance(
+        payload,
+        source_material=source_material,
+    )
+    product_requirements = _product_requirements(payload, product_relevance)
     content_package = legacy.get("content_package", {})
     script = content_package.get("script", {})
     risk_gate = deepcopy(legacy.get("risk_gate", {}))
-    product_requirements = _product_requirements(payload)
 
-    source_missing = legacy.get("source", {}).get("missing", [])
+    source_missing = (
+        list(legacy_source.get("missing", []))
+        if isinstance(legacy_source, dict)
+        else []
+    )
+    product_source_gaps = [
+        str(item) for item in source_missing if _is_product_gap(item)
+    ]
+    optional_enhancements = _optional_enhancements(legacy_source, source_missing)
+    reviewed_source_gaps = [
+        str(item)
+        for item in source_missing
+        if not _is_product_gap(item) and not is_optional_enhancement(item)
+    ]
+    optional_enhancements = list(
+        dict.fromkeys([*optional_enhancements, *reviewed_source_gaps])
+    )
+    interpretation_blocking: list[str] = []
+    if product_relevance["status"] == "has_product" and product_source_gaps:
+        product_requirements["source_evidence_gaps"] = product_source_gaps
+        product_requirements["follow_up"] = list(
+            dict.fromkeys(
+                [
+                    *product_requirements.get("follow_up", []),
+                    *product_source_gaps,
+                ]
+            )
+        )
+    if isinstance(legacy_source, dict):
+        legacy_source["missing"] = interpretation_blocking
+    if product_relevance["status"] == "no_product":
+        boundary = legacy.get("evidence_boundary")
+        if isinstance(boundary, dict):
+            boundary["pending"] = [
+                item
+                for item in boundary.get("pending", [])
+                if not _is_product_gap(item)
+            ]
+
     fixture_customer_facts = legacy.get("evidence_boundary", {}).get("customer_facts", [])
     fixture_product_missing = any(
         "产品" in str(item) or "商品" in str(item)
         for item in source_missing
     )
     request_changes_product = bool(payload and (payload.product or payload.product_context))
-    product_evidence_ready = bool(fixture_customer_facts) and not fixture_product_missing
+    product_evidence_ready = (
+        product_relevance["status"] == "no_product"
+        or (bool(fixture_customer_facts) and not fixture_product_missing)
+    )
     source_gate_publishable = bool(risk_gate.get("publishable", False))
     publishable = source_gate_publishable and product_evidence_ready
     publishable = publishable and not request_changes_product
@@ -356,7 +563,11 @@ def _fixture_report_v02(
         risk_gate["publishable"] = False
     if source_gate_publishable and not publishable:
         risk_gate["status"] = "needs_human_review"
-        risk_gate["message"] = "内容方案已生成；商品证据和补充资料完成复核后即可进入发布确认。"
+        risk_gate["message"] = (
+            "内容方案已生成；商品证据和补充资料完成复核后即可进入发布确认。"
+            if product_relevance["status"] == "has_product"
+            else "内容方案已生成；发布前完成来源与风险复核后即可进入发布确认。"
+        )
     legacy["risk_gate"] = risk_gate
     delivery_status = "publish_ready" if publishable else "research_draft"
     preferred = {
@@ -368,6 +579,8 @@ def _fixture_report_v02(
             "label": "唯一推荐稿",
             "message": (
                 "这是唯一推荐研究稿；商品资料与人工审核完成前不得标记为可发布。"
+                if product_relevance["status"] == "has_product"
+                else "这是唯一推荐研究稿；普通解读无需商品资料，发布前仍需人工复核。"
             ),
         },
         "recommended_script": {
@@ -380,7 +593,7 @@ def _fixture_report_v02(
             "selection_reason": "沿用已审阅演示样本中的唯一完整脚本，不在请求时补写事实。",
             "source_basis": "registered_fixture_content_package",
         },
-        "shooting_table": _shooting_table_from_fixture(legacy),
+        "shooting_table": _shooting_table_from_fixture(legacy, product_relevance),
         "publishing_package": {
             "status": delivery_status,
             "publishable": publishable,
@@ -391,7 +604,15 @@ def _fixture_report_v02(
             "comment_replies": content_package.get("comment_replies", []),
         },
         "localization": _localization_state(payload),
+        "product_relevance": product_relevance,
         "product_requirements": product_requirements,
+        "requirements": _requirements_snapshot(
+            product_relevance=product_relevance,
+            product_requirements=product_requirements,
+            blocking=interpretation_blocking,
+            optional=optional_enhancements,
+            distillation_complete=True,
+        ),
         "evidence_and_risk": {
             "source_evidence": legacy.get("source", {}).get("evidence", []),
             "evidence_boundary": legacy.get("evidence_boundary"),
@@ -405,6 +626,14 @@ def _fixture_report_v02(
     preferred.update(
         {key: value for key, value in legacy.items() if key != "report_schema_version"}
     )
+    _sync_requirement_fields(
+        preferred,
+        product_relevance=product_relevance,
+        product_requirements=product_requirements,
+        blocking=interpretation_blocking,
+        optional=optional_enhancements,
+        distillation_complete=True,
+    )
     return preferred
 
 
@@ -414,7 +643,9 @@ def _completed_response(
 ) -> AnalysisResponse:
     report = _fixture_report_v02(case["report"], payload)
     source = report.get("source", {})
-    missing = list(source.get("missing", []))
+    missing = list(
+        report.get("requirements", {}).get("blocking_for_interpretation", [])
+    )
     return AnalysisResponse(
         status="completed",
         platform=str(source.get("platform", "douyin")),
@@ -517,18 +748,24 @@ def _research_report(payload: AnalyzeRequest, platform: str) -> tuple[dict[str, 
     if len(transcript) > excerpt_limit:
         excerpt += "..."
 
-    product_requirements = _product_requirements(payload)
-    missing = [
-        "实时公开指标",
-        "评论原文",
-        "经模型或人工完成的内容蒸馏",
-        *product_requirements["missing_fields"],
-    ]
+    product_relevance = _product_relevance(payload, transcript=transcript)
+    product_requirements = _product_requirements(payload, product_relevance)
+    missing = ["经模型或人工完成的内容蒸馏"]
+    optional_enhancements = _optional_enhancements()
+    product_blocking = (
+        list(product_requirements.get("missing_fields", []))
+        if product_relevance["status"] == "has_product"
+        else []
+    )
     risk_gate = {
         "status": "not_run",
         "publishable": False,
-        "message": "这是可继续改编的研究稿；商品事实与行业风险仍需在发布前完成复核。",
-        "blocking_items": missing,
+        "message": (
+            "这是可继续改编的研究稿；商品事实与行业风险仍需在发布前完成复核。"
+            if product_relevance["status"] == "has_product"
+            else "这是可继续改编的研究稿；普通解读无需商品资料，发布前仍需完成来源与风险复核。"
+        ),
+        "blocking_items": [*missing, *product_blocking],
     }
     source = _submitted_source(payload.url, platform)
     source["acquisition_mode"] = "transcript_fallback"
@@ -541,6 +778,14 @@ def _research_report(payload: AnalyzeRequest, platform: str) -> tuple[dict[str, 
         }
     )
     source["missing"] = missing
+    pending = [*missing, *product_blocking]
+    columns = ["time", "visual", "voiceover", "subtitle"]
+    if product_relevance["status"] == "has_product":
+        columns.append("product_proof")
+    columns.append("sound")
+    shooting_missing = ["time", "visual", "voiceover", "subtitle", "sound"]
+    if product_relevance["status"] == "has_product":
+        shooting_missing.insert(-1, "product_proof")
 
     report = {
         "report_schema_version": "0.2",
@@ -549,7 +794,11 @@ def _research_report(payload: AnalyzeRequest, platform: str) -> tuple[dict[str, 
             "status": "research_draft",
             "publishable": False,
             "label": "研究稿",
-            "message": "资料已入库，但尚不足以生成可发布成稿。",
+            "message": (
+                "资料已入库，但尚不足以生成可发布成稿。"
+                if product_relevance["status"] == "has_product"
+                else "资料已入库；当前先完成内容解读，不需要商品资料。"
+            ),
         },
         "recommended_script": {
             "status": "blocked_needs_analysis",
@@ -564,16 +813,9 @@ def _research_report(payload: AnalyzeRequest, platform: str) -> tuple[dict[str, 
         },
         "shooting_table": {
             "status": "blocked_needs_script",
-            "columns": ["time", "visual", "voiceover", "subtitle", "product_proof", "sound"],
+            "columns": columns,
             "rows": [],
-            "missing_fields": [
-                "time",
-                "visual",
-                "voiceover",
-                "subtitle",
-                "product_proof",
-                "sound",
-            ],
+            "missing_fields": shooting_missing,
         },
         "publishing_package": {
             "status": "blocked_needs_script",
@@ -585,7 +827,14 @@ def _research_report(payload: AnalyzeRequest, platform: str) -> tuple[dict[str, 
             "comment_replies": [],
         },
         "localization": _localization_state(payload),
+        "product_relevance": product_relevance,
         "product_requirements": product_requirements,
+        "requirements": _requirements_snapshot(
+            product_relevance=product_relevance,
+            product_requirements=product_requirements,
+            blocking=missing,
+            optional=optional_enhancements,
+        ),
         "evidence_and_risk": {
             "source_evidence": source["evidence"],
             "evidence_boundary": {
@@ -595,7 +844,7 @@ def _research_report(payload: AnalyzeRequest, platform: str) -> tuple[dict[str, 
                     f"用户补充了 {len(transcript)} 个字符的字幕或口播稿。",
                 ],
                 "inferences": [],
-                "pending": missing,
+                "pending": pending,
             },
             "risk_gate": risk_gate,
             "transcript_status": "user_supplied_unverified",
@@ -607,6 +856,7 @@ def _research_report(payload: AnalyzeRequest, platform: str) -> tuple[dict[str, 
             "transcript_excerpt": excerpt,
             "transcript_characters": len(transcript),
             "product_context_received": bool(payload.product_context or payload.product),
+            "product_relevance_status": product_relevance["status"],
         },
         "distillation": None,
         "traffic_assessment": None,
@@ -619,19 +869,28 @@ def _research_report(payload: AnalyzeRequest, platform: str) -> tuple[dict[str, 
 
 def _partial_response(payload: AnalyzeRequest, platform: str) -> AnalysisResponse:
     report, missing = _research_report(payload, platform)
+    product_status = report["product_relevance"]["status"]
     return AnalysisResponse(
         status="partial",
         platform=platform,
         message=(
             "已建立字幕证据记录和 v0.2 研究稿骨架；当前未执行深度模型分析，"
-            "不会伪造蒸馏、脚本、商品事实或合规结论。"
+            + (
+                "不会伪造蒸馏、脚本、商品事实或合规结论。"
+                if product_status == "has_product"
+                else "不会伪造蒸馏、脚本或合规结论；普通解读不要求商品资料。"
+            )
         ),
         source=report["source"],
         report=report,
         missing=missing,
         next_action={
             "type": "human_or_model_analysis",
-            "label": "补齐商品资料并进入受控深度分析",
+            "label": (
+                "按需补齐商品资料并进入受控深度分析"
+                if product_status == "has_product"
+                else "进入受控深度分析"
+            ),
         },
     )
 
@@ -644,16 +903,43 @@ def _apply_generated_research_draft(
     if report is None:
         return response
     data = generated.data
+    rule_relevance = report.get("product_relevance")
+    if not isinstance(rule_relevance, dict):
+        rule_relevance = infer_product_relevance()
+    product_relevance = merge_product_relevance(
+        rule_relevance,
+        data.get("product_relevance"),
+    )
+    existing_product_requirements = report.get("product_requirements", {})
+    submitted = (
+        existing_product_requirements.get("submitted", {})
+        if isinstance(existing_product_requirements, dict)
+        else {}
+    )
+    product_requirements = build_product_requirements(
+        product=submitted.get("structured") if isinstance(submitted, dict) else None,
+        product_context=submitted.get("legacy_context")
+        if isinstance(submitted, dict)
+        else None,
+        relevance=product_relevance,
+    )
     recommended = dict(data["recommended_script"])
     recommended.update(
         {
             "status": "research_draft",
             "is_primary": True,
             "publishable": False,
-            "source_basis": "verified_transcript_and_client_product_input",
+            "source_basis": (
+                "verified_transcript_and_client_product_input"
+                if product_relevance["status"] == "has_product"
+                else "verified_transcript"
+            ),
         }
     )
-    rows = data["shooting_table"]
+    rows = [dict(row) for row in data["shooting_table"]]
+    if product_relevance["status"] != "has_product":
+        for row in rows:
+            row.pop("product_proof", None)
     publishing = dict(data["publishing_package"])
     publishing.update({"status": "research_draft", "publishable": False})
 
@@ -661,28 +947,47 @@ def _apply_generated_research_draft(
         "status": "research_draft",
         "publishable": False,
         "label": "唯一推荐研究稿",
-        "message": "DeepSeek 已生成研究稿；商品事实与人工审核仍需在发布前完成。",
-    }
-    report["recommended_script"] = recommended
-    report["shooting_table"] = {
-        "status": "research_draft",
-        "columns": [
-            "time",
-            "visual",
-            "voiceover",
-            "subtitle",
-            "product_proof",
-            "sound",
-        ],
-        "rows": rows,
-        "missing_fields": report.get("product_requirements", {}).get(
-            "missing_fields", []
+        "message": (
+            "DeepSeek 已生成研究稿；商品事实与人工审核仍需在发布前完成。"
+            if product_relevance["status"] == "has_product"
+            else "DeepSeek 已生成研究稿；普通解读无需商品资料，发布前仍需人工复核。"
         ),
     }
+    report["recommended_script"] = recommended
+    columns = ["time", "visual", "voiceover", "subtitle"]
+    if product_relevance["status"] == "has_product":
+        columns.append("product_proof")
+    columns.append("sound")
+    report["shooting_table"] = {
+        "status": "research_draft",
+        "columns": columns,
+        "rows": rows,
+        "missing_fields": product_requirements.get("missing_fields", []),
+    }
     report["publishing_package"] = publishing
-    report["distillation"] = data.get("marketing_structure")
+    distillation = dict(data.get("marketing_structure") or {})
+    if product_relevance["status"] != "has_product" and "product_demo" in distillation:
+        distillation["content_demonstration"] = distillation.pop("product_demo")
+    report["distillation"] = distillation
+    _sync_requirement_fields(
+        report,
+        product_relevance=product_relevance,
+        product_requirements=product_requirements,
+        blocking=report.get("requirements", {}).get(
+            "blocking_for_interpretation", []
+        ),
+        optional=report.get("requirements", {}).get("optional_enhancements", []),
+        distillation_complete=True,
+    )
     evidence_boundary = data.get("evidence_boundary")
     if isinstance(evidence_boundary, dict):
+        evidence_boundary = dict(evidence_boundary)
+        if product_relevance["status"] != "has_product":
+            evidence_boundary["pending"] = [
+                item
+                for item in evidence_boundary.get("pending", [])
+                if not _is_product_gap(item)
+            ]
         report["evidence_and_risk"]["generated_evidence_boundary"] = evidence_boundary
     report["generation"] = {
         "status": "completed_research_draft",
@@ -693,15 +998,26 @@ def _apply_generated_research_draft(
         "provider_metadata": generated.provider_metadata,
         "message": "内容生成完成；服务器已强制保留研究稿与发布前人工审核。",
     }
+    report["risk_gate"]["blocking_items"] = product_requirements.get(
+        "missing_fields", []
+    )
     report["risk_gate"]["publishable"] = False
     report["evidence_and_risk"]["risk_gate"]["publishable"] = False
+    response.missing = list(
+        report["requirements"]["blocking_for_interpretation"]
+    )
     response.message = (
-        "已根据字幕和商品资料生成唯一推荐研究稿；"
-        "商品事实核验与人工审核完成后即可进入发布确认。"
+        "已根据字幕和商品资料生成唯一推荐研究稿；商品事实核验与人工审核完成后即可进入发布确认。"
+        if product_relevance["status"] == "has_product"
+        else "已生成唯一推荐研究稿；当前内容不需要商品资料，发布前仍需完成来源与风险复核。"
     )
     response.next_action = {
         "type": "review_research_draft",
-            "label": "核对商品事实、拍摄表与待核验项",
+        "label": (
+            "核对商品事实、拍摄表与待核验项"
+            if product_relevance["status"] == "has_product"
+            else "核对拍摄表与发布前审核项"
+        ),
     }
     return response
 
@@ -713,7 +1029,50 @@ def _apply_generated_quick_result(
     report = response.report
     if report is None:
         return response
-    report["quick_result"] = generated.data
+    quick_data = dict(generated.data)
+    rule_relevance = report.get("product_relevance")
+    if not isinstance(rule_relevance, dict):
+        rule_relevance = infer_product_relevance()
+    product_relevance = merge_product_relevance(
+        rule_relevance,
+        quick_data.pop("product_relevance", None),
+    )
+    existing_product_requirements = report.get("product_requirements", {})
+    submitted = (
+        existing_product_requirements.get("submitted", {})
+        if isinstance(existing_product_requirements, dict)
+        else {}
+    )
+    product_requirements = build_product_requirements(
+        product=submitted.get("structured") if isinstance(submitted, dict) else None,
+        product_context=submitted.get("legacy_context")
+        if isinstance(submitted, dict)
+        else None,
+        relevance=product_relevance,
+    )
+    quick_evidence = quick_data.get("evidence_boundary")
+    if (
+        product_relevance["status"] != "has_product"
+        and isinstance(quick_evidence, dict)
+    ):
+        quick_evidence = dict(quick_evidence)
+        quick_evidence["pending"] = [
+            item
+            for item in quick_evidence.get("pending", [])
+            if not _is_product_gap(item)
+        ]
+        quick_data["evidence_boundary"] = quick_evidence
+    report["quick_result"] = quick_data
+    _sync_requirement_fields(
+        report,
+        product_relevance=product_relevance,
+        product_requirements=product_requirements,
+        blocking=report.get("requirements", {}).get(
+            "blocking_for_interpretation", []
+        ),
+        optional=report.get("requirements", {}).get("optional_enhancements", []),
+        distillation_complete=True,
+    )
     report["generation"] = {
         "status": "completed_quick",
         "provider": generated.provider,
@@ -723,10 +1082,19 @@ def _apply_generated_quick_result(
         "provider_metadata": generated.provider_metadata,
         "message": "快速解读已完成；完整脚本和发布包可按需继续生成。",
     }
-    response.message = "已先生成快速解读；需要完整脚本时可继续补充商品资料。"
+    response.missing = list(report["requirements"]["blocking_for_interpretation"])
+    response.message = (
+        "已先生成快速解读；需要完整脚本时可继续补充商品资料。"
+        if product_relevance["status"] == "has_product"
+        else "已先生成快速解读；当前内容不需要商品资料。"
+    )
     response.next_action = {
         "type": "generate_full_package",
-        "label": "补充商品资料并生成完整脚本",
+        "label": (
+            "补充商品资料并生成完整脚本"
+            if product_relevance["status"] == "has_product"
+            else "生成完整脚本"
+        ),
     }
     return response
 
@@ -870,8 +1238,21 @@ def _attach_acquisition_context(
         analysis_missing = [
             missing for missing in analysis_missing if missing != "实时公开指标"
         ]
+    optional_enhancements = _optional_enhancements(
+        {
+            "metrics": metrics,
+            "public_comment_summary": item.get("public_comment_summary"),
+            "evidence": item.get("evidence", []),
+        },
+        manifest_missing,
+    )
+    hard_manifest_missing = [
+        str(item)
+        for item in manifest_missing
+        if not is_optional_enhancement(item) and not _is_product_gap(item)
+    ]
     combined_missing = list(
-        dict.fromkeys([*(str(item) for item in manifest_missing), *analysis_missing])
+        dict.fromkeys([*hard_manifest_missing, *analysis_missing])
     )
     transcript_source = str(transcript.get("source") or "worker_transcript")
     acquisition_context = {
@@ -922,6 +1303,26 @@ def _attach_acquisition_context(
         return response
     report["source"] = source
     report["acquisition"] = acquisition_context
+    existing_requirements = report.get("requirements", {})
+    existing_relevance = report.get("product_relevance")
+    if not isinstance(existing_relevance, dict):
+        existing_relevance = infer_product_relevance()
+    existing_product_requirements = report.get("product_requirements")
+    if not isinstance(existing_product_requirements, dict):
+        existing_product_requirements = build_product_requirements(
+            relevance=existing_relevance
+        )
+    _sync_requirement_fields(
+        report,
+        product_relevance=existing_relevance,
+        product_requirements=existing_product_requirements,
+        blocking=combined_missing,
+        optional=[
+            *existing_requirements.get("optional_enhancements", []),
+            *optional_enhancements,
+        ] if isinstance(existing_requirements, dict) else optional_enhancements,
+        distillation_complete=bool(report.get("distillation") or report.get("quick_result")),
+    )
     evidence_and_risk = report.get("evidence_and_risk")
     if isinstance(evidence_and_risk, dict):
         evidence_and_risk["source_evidence"] = source["evidence"]
@@ -957,7 +1358,16 @@ def _attach_acquisition_context(
         material["transcript_segment_count"] = transcript.get("segment_count")
     risk_gate = report.get("risk_gate")
     if isinstance(risk_gate, dict):
-        risk_gate["blocking_items"] = combined_missing
+        risk_gate["blocking_items"] = list(
+            dict.fromkeys(
+                [
+                    *combined_missing,
+                    *report.get("requirements", {}).get(
+                        "product_for_rewrite_or_publish", []
+                    ),
+                ]
+            )
+        )
     return response
 
 
@@ -1268,6 +1678,7 @@ async def analyze(payload: AnalyzeRequest) -> AnalysisResponse:
                     if payload.product
                     else None
                 ),
+                product_relevance=response.report.get("product_relevance"),
             )
         except ContentGenerationError as exc:
             response.report["generation"] = {
@@ -1291,6 +1702,7 @@ async def analyze(payload: AnalyzeRequest) -> AnalysisResponse:
                 if payload.product
                 else None
             ),
+            product_relevance=response.report.get("product_relevance"),
         )
     except ContentGenerationError as exc:
         response.report["generation"] = {
@@ -1327,6 +1739,7 @@ async def analyze_acquisition_job(
         transcript=str(transcript["text"]) if isinstance(transcript, dict) else None,
         product_context=payload.product_context,
         product=payload.product,
+        product_relevance_override=payload.product_relevance_override,
         market=payload.market,
     )
     response = await analyze(analysis_payload)

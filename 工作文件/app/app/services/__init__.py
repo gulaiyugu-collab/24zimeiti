@@ -11,6 +11,12 @@ from .content_generation import (
     ContentGenerationRouter,
     DeepSeekContentProvider,
 )
+from .product_relevance import (
+    build_product_requirements,
+    infer_product_relevance,
+    is_optional_enhancement,
+    merge_product_relevance,
+)
 
 __all__ = [
     "AcquisitionJobManager",
@@ -24,4 +30,8 @@ __all__ = [
     "ContentGenerationResult",
     "ContentGenerationRouter",
     "DeepSeekContentProvider",
+    "build_product_requirements",
+    "infer_product_relevance",
+    "is_optional_enhancement",
+    "merge_product_relevance",
 ]

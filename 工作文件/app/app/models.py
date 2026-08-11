@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 AnalysisStatus = Literal["completed", "needs_input", "partial", "unsupported"]
 AnalysisMode = Literal["quick", "full"]
+ProductRelevanceOverride = Literal["has_product", "no_product", "needs_confirmation"]
 PlatformStatus = Literal["active", "planned"]
 ASRMode = Literal["auto", "external", "local", "disabled"]
 TranscriptionStatus = Literal["completed", "unavailable", "failed"]
@@ -71,6 +72,7 @@ class AnalyzeRequest(BaseModel):
     transcript: str | None = Field(default=None, max_length=50_000)
     product_context: str | None = Field(default=None, max_length=10_000)
     product: ProductInput | None = None
+    product_relevance_override: ProductRelevanceOverride | None = None
     market: MarketSelection = Field(default_factory=MarketSelection)
     asr: ASRPreferences = Field(default_factory=ASRPreferences)
 
@@ -94,6 +96,7 @@ class AcquisitionAnalysisRequest(BaseModel):
     analysis_mode: AnalysisMode = "quick"
     product_context: str | None = Field(default=None, max_length=10_000)
     product: ProductInput | None = None
+    product_relevance_override: ProductRelevanceOverride | None = None
     market: MarketSelection = Field(default_factory=MarketSelection)
 
     @field_validator("product_context")

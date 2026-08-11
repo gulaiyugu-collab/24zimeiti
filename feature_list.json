@@ -228,6 +228,28 @@
         "产出\\验真\\p2_douyin_split_av_20260812\\browser-results.json 全通过；完成缓存、报告渲染、终态停止轮询及控制台/页面/请求诊断均通过",
         "Python 回归 55/55、compileall、pip check、JavaScript、浏览器探测脚本和 PowerShell 语法检查通过"
       ]
+    },
+    {
+      "id": "P2-07",
+      "priority": 12,
+      "title": "商品属性分流与条件化资料门槛",
+      "status": "completed",
+      "passes": true,
+      "acceptance": [
+        "Agent 对商品、非商品和模糊内容返回可解释的商品属性状态、置信度、依据、原因和后续动作",
+        "无商品内容不显示商品名称、核心卖点、规格、证明材料或商品拍摄证明缺失项",
+        "待确认内容不阻塞普通解读，并提供用户确认入口",
+        "商品资料只进入商品改写或正式发布范围；OCR、镜头、评论和指标作为可选增强项",
+        "模型完成快速或完整解读后不再提示内容蒸馏缺失",
+        "桌面、390px 和正式 8792 入口无控制台错误、请求错误或横向溢出"
+      ],
+      "evidence": [
+        "新增 app/services/product_relevance.py，规则初判、模型修正、用户确认覆盖和商品资料条件化均有定向测试",
+        "Python 全量回归 65/65、compileall、JavaScript 语法检查和 pip check 通过",
+        "产出\\验真\\p2_product_relevance_20260812_r4 的桌面与 390px 浏览器验收 26/26 通过",
+        "产出\\验真\\p2_product_relevance_formal_20260812_r3 的正式 127.0.0.1:8792 登记样本验收 11/11 通过",
+        "正式服务健康状态 version=0.3.0、paid_content_enabled=true，登记样本 blocking_for_interpretation 与顶层 missing 均为 0"
+      ]
     }
   ]
 }

@@ -9,6 +9,8 @@ from typing import Any, Callable
 
 import httpx
 
+from .product_relevance import normalize_model_product_relevance
+
 
 _SECRET_PATTERNS = (
     re.compile(r"(?i)\bBearer\s+[^\s,;]+"),
@@ -144,6 +146,9 @@ def _validate_payload(payload: Any) -> dict[str, Any]:
         raise ContentGenerationError("DeepSeek 没有返回 JSON 对象。")
 
     summary = _required_text(payload, "summary", "root")
+    product_relevance = normalize_model_product_relevance(
+        payload.get("product_relevance")
+    )
 
     marketing = payload.get("marketing_structure")
     if not isinstance(marketing, dict):
@@ -246,7 +251,7 @@ def _validate_payload(payload: Any) -> dict[str, Any]:
         for key in ("facts", "inferences", "pending")
     }
 
-    return {
+    result = {
         "status": "research_draft",
         "publishable": False,
         "summary": summary,
@@ -256,6 +261,9 @@ def _validate_payload(payload: Any) -> dict[str, Any]:
         "publishing_package": normalized_publishing,
         "evidence_boundary": normalized_evidence,
     }
+    if product_relevance is not None:
+        result["product_relevance"] = product_relevance
+    return result
 
 
 def _quick_validate_payload(payload: Any) -> dict[str, Any]:
@@ -264,6 +272,9 @@ def _quick_validate_payload(payload: Any) -> dict[str, Any]:
         raise ContentGenerationError("DeepSeek 没有返回快速结果对象。")
 
     summary = _required_text(payload, "summary", "root")
+    product_relevance = normalize_model_product_relevance(
+        payload.get("product_relevance")
+    )
     what_happens = _string_list(payload.get("what_happens"), "what_happens", allow_empty=False)
     why_it_works = _string_list(payload.get("why_it_works"), "why_it_works", allow_empty=False)
     transferable = _string_list(
@@ -277,7 +288,7 @@ def _quick_validate_payload(payload: Any) -> dict[str, Any]:
         key: _string_list(evidence.get(key), f"evidence_boundary.{key}")
         for key in ("facts", "inferences", "pending")
     }
-    return {
+    result = {
         "summary": summary,
         "what_happens": what_happens[:5],
         "why_it_works": why_it_works[:5],
@@ -285,6 +296,9 @@ def _quick_validate_payload(payload: Any) -> dict[str, Any]:
         "original_angle": original_angle,
         "evidence_boundary": normalized_evidence,
     }
+    if product_relevance is not None:
+        result["product_relevance"] = product_relevance
+    return result
 
 
 def _safe_usage(value: Any) -> dict[str, int] | None:
@@ -336,6 +350,7 @@ class DeepSeekContentProvider:
         transcript: str,
         product_context: str | None,
         product: dict[str, Any] | None,
+        product_relevance: dict[str, Any] | None = None,
     ) -> ContentGenerationResult:
         secret = _deepseek_key()
         if not secret:
@@ -348,7 +363,9 @@ class DeepSeekContentProvider:
         }
         system_prompt = (
             "你是项目024自媒体通关搭档的内容编排器。"
-            "只依据用户提供的字幕和商品资料生成中文商品短视频研究稿。"
+            "只依据用户提供的字幕和资料生成中文内容研究稿，先判断是否具有商品属性。"
+            "如果没有商品属性，不要生成商品名称、核心卖点、规格或证明材料清单。"
+            "如果待确认，只给出判断依据和确认建议，不要阻塞普通内容解读。"
             "不得把推断写成商品事实；缺失信息必须写成[待确认：字段]。"
             "只给一版唯一推荐脚本，不能复制来源原句形成洗稿。"
             "完整口播稿必须为400-800个中文字符，目标时长60-90秒；"
@@ -361,11 +378,19 @@ class DeepSeekContentProvider:
             "platform": platform,
             "transcript": transcript,
             "product": product_payload,
+            "inferred_product_relevance": product_relevance,
             "required_schema": {
                 "summary": "甲方可读的一句话结论",
+                "product_relevance": {
+                    "status": "has_product、no_product 或 needs_confirmation",
+                    "confidence": "high、medium 或 low",
+                    "evidence": ["引用字幕或画面中的判断依据"],
+                    "reason": "用普通话说明为什么这样判断",
+                    "follow_up": ["后续建议；无商品时明确无需补商品资料"],
+                },
                 "marketing_structure": {
                     "hook": "来源钩子与证据",
-                    "product_demo": "商品演示与证据",
+                    "product_demo": "有商品时写商品演示与证据；无商品时写方法、场景或观点演示",
                     "value_proposition": "价值主张与证据边界",
                     "cta": "行动引导与证据边界",
                 },
@@ -473,6 +498,7 @@ class DeepSeekContentProvider:
         transcript: str,
         product_context: str | None,
         product: dict[str, Any] | None,
+        product_relevance: dict[str, Any] | None = None,
     ) -> ContentGenerationResult:
         """Return a compact, user-facing understanding before the full package."""
         secret = _deepseek_key()
@@ -484,8 +510,16 @@ class DeepSeekContentProvider:
             "platform": platform,
             "transcript": transcript,
             "product": {"free_text": product_context, "structured": product},
+            "inferred_product_relevance": product_relevance,
             "required_schema": {
                 "summary": "用普通人能看懂的一句话说明这条内容在讲什么",
+                "product_relevance": {
+                    "status": "has_product、no_product 或 needs_confirmation",
+                    "confidence": "high、medium 或 low",
+                    "evidence": ["字幕或画面中能支持判断的依据"],
+                    "reason": "判断原因",
+                    "follow_up": ["后续建议"],
+                },
                 "what_happens": ["内容的关键步骤或结构，最多5条"],
                 "why_it_works": ["观众为什么会继续看或采取行动，最多5条"],
                 "transferable": ["可以借鉴的方法，不能复制原句，最多5条"],
@@ -500,7 +534,8 @@ class DeepSeekContentProvider:
         system_prompt = (
             "你是项目024的快速内容解读器。只依据用户提供的字幕和商品资料，"
             "用普通人能看懂的中文解释内容，不生成完整脚本，不补写商品事实，"
-            "不把推断写成事实，不复刻来源原句。只返回严格JSON对象。"
+            "不把推断写成事实，不复刻来源原句。先判断商品属性；"
+            "无商品时不要列商品资料缺失。只返回严格JSON对象。"
         )
         request_payload = {
             "model": model,

@@ -111,7 +111,7 @@
                   <p class="media-file-meta" id="mediaFileMeta">尚未选择文件</p>
                   <div class="transcription-status" id="transcriptionStatus" role="status" aria-live="polite" hidden></div>
                 </div>
-                <div class="field">
+                <div class="field" id="productContextField">
                   <label for="productContextInput">已确认的商品事实</label>
                   <textarea
                     id="productContextInput"
@@ -182,6 +182,8 @@
                 <button class="button button--primary" id="scriptNextButton" type="button">生成我的原创稿</button>
               </div>
             </section>
+
+            <section class="product-relevance" id="productRelevance" aria-labelledby="productRelevanceTitle" hidden></section>
 
             <!-- 通关路径导航（签名交互） -->
             <nav class="pathway" id="pathway" aria-label="内容通关路径">
@@ -284,6 +286,7 @@
                 <span class="stage__status" id="stagePublishStatus"></span>
               </div>
               <div id="publishingPackage"></div>
+              <div id="requirementsSummary"></div>
               <div class="professional-grid">
                 <aside class="evidence-column" aria-label="来源与证据">
                   <div class="column-heading">
