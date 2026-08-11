@@ -68,7 +68,7 @@
 - 新增结构化 `product_relevance`，统一返回 `has_product`、`no_product` 或 `needs_confirmation`，并附置信度、判断依据、原因、后续动作和用户确认覆盖；规则初判可由完整模型结果补充或修正，用户已提交的商品资料和明确确认优先。
 - 资料缺口现分为 `blocking_for_interpretation`、`optional_enhancements` 和 `product_for_rewrite_or_publish`。商品名称、核心卖点、规格和证明材料不再阻塞普通内容解读；无商品内容不返回或展示这些商品缺失项。
 - DeepSeek 已完成快速或完整解读后会清除“经模型或人工完成的内容蒸馏”缺失项；无商品内容的拍摄表不再包含 `product_proof`，内容蒸馏改用通用“内容演示”字段。
-- 页面新增独立商品属性栏、判断依据、后续意见和待确认按钮；无商品或待确认时隐藏商品资料输入，证据与转写详情默认折叠。桌面与 390px 浏览器验收 26/26，正式 `127.0.0.1:8792` 登记样本验收 11/11，控制台、页面、请求、异常响应和横向溢出均为 0；证据位于 `产出\验真\p2_product_relevance_20260812_r4` 与 `产出\验真\p2_product_relevance_formal_20260812_r3`。
+- 页面新增独立商品属性栏、判断依据、后续意见和待确认按钮；无商品或待确认时隐藏商品资料输入，证据与转写详情默认折叠。桌面与 390px 浏览器验收 26/26，正式 `127.0.0.1:8792` 登记样本验收 11/11，控制台、页面、请求、异常响应和横向溢出均为 0；证据位于 `产出\验真\p2_product_relevance_20260812_r4` 与 `产出\验真\p2_product_relevance_formal_20260812_r4`。
 - 本轮最终 Python 全量回归 65/65、`compileall`、JavaScript 语法检查和 `pip check` 通过；正式服务已重启并保持 `version=0.3.0`、`paid_content_enabled=true`。
 
 ## 当前原子任务
