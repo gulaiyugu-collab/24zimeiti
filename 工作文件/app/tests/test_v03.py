@@ -94,7 +94,10 @@ class V03QuickResultTests(unittest.TestCase):
         self.assertEqual(200, response.status_code)
         payload = response.json()
         self.assertEqual("partial", payload["status"])
-        self.assertEqual("completed_quick", payload["report"]["generation"]["status"])
+        self.assertEqual(
+            "completed_quick", payload["diagnostics"]["generation"]["status"]
+        )
+        self.assertNotIn("generation", payload["report"])
         self.assertEqual(quick["summary"], payload["report"]["quick_result"]["summary"])
         self.assertIsNone(payload["report"]["recommended_script"]["full_text"])
         self.assertNotIn(secret, response.text)

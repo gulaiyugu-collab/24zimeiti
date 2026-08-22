@@ -989,7 +989,7 @@ def _apply_generated_research_draft(
                 if not _is_product_gap(item)
             ]
         report["evidence_and_risk"]["generated_evidence_boundary"] = evidence_boundary
-    report["generation"] = {
+    response.diagnostics["generation"] = {
         "status": "completed_research_draft",
         "provider": generated.provider,
         "model": generated.model,
@@ -1073,7 +1073,7 @@ def _apply_generated_quick_result(
         optional=report.get("requirements", {}).get("optional_enhancements", []),
         distillation_complete=True,
     )
-    report["generation"] = {
+    response.diagnostics["generation"] = {
         "status": "completed_quick",
         "provider": generated.provider,
         "model": generated.model,
@@ -1216,9 +1216,8 @@ def _attach_acquisition_context(
             **context_base,
             "transcript": None,
         }
-        response.source["acquisition"] = acquisition_context
+        response.diagnostics["acquisition"] = acquisition_context
         if response.report is not None:
-            response.report["acquisition"] = acquisition_context
             response.report["source"] = response.source
         response.message = "登记样本采集任务已进入内容分析。" + response.message
         return response
@@ -1269,6 +1268,7 @@ def _attach_acquisition_context(
             "sha256": transcript_artifact["sha256"],
         },
     }
+    response.diagnostics["acquisition"] = acquisition_context
 
     source = response.source
     source["url"] = manifest.get("canonical_url") or source.get("url")
@@ -1294,7 +1294,6 @@ def _attach_acquisition_context(
         }
     )
     source["missing"] = combined_missing
-    source["acquisition"] = acquisition_context
     response.missing = combined_missing
     response.message = "采集任务已自动进入内容分析。" + response.message
 
@@ -1302,7 +1301,6 @@ def _attach_acquisition_context(
     if report is None:
         return response
     report["source"] = source
-    report["acquisition"] = acquisition_context
     existing_requirements = report.get("requirements", {})
     existing_relevance = report.get("product_relevance")
     if not isinstance(existing_relevance, dict):
@@ -1666,7 +1664,7 @@ async def analyze(payload: AnalyzeRequest) -> AnalysisResponse:
     if response.report is None:
         return response
 
-    response.report["generation"] = content_router.plan()
+    response.diagnostics["generation"] = content_router.plan()
     if payload.analysis_mode == "quick":
         try:
             generated = await content_router.generate_quick(
@@ -1681,7 +1679,7 @@ async def analyze(payload: AnalyzeRequest) -> AnalysisResponse:
                 product_relevance=response.report.get("product_relevance"),
             )
         except ContentGenerationError as exc:
-            response.report["generation"] = {
+            response.diagnostics["generation"] = {
                 **content_router.plan(),
                 "status": "failed_quick_fallback",
                 "paid_api_called": True,
@@ -1705,7 +1703,7 @@ async def analyze(payload: AnalyzeRequest) -> AnalysisResponse:
             product_relevance=response.report.get("product_relevance"),
         )
     except ContentGenerationError as exc:
-        response.report["generation"] = {
+        response.diagnostics["generation"] = {
             **content_router.plan(),
             "status": "failed_research_draft_fallback",
             "paid_api_called": True,

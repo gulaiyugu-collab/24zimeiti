@@ -127,6 +127,7 @@ class AnalysisResponse(BaseModel):
     message: str
     source: dict[str, Any]
     report: dict[str, Any] | None = None
+    diagnostics: dict[str, Any] = Field(default_factory=dict)
     missing: list[str] = Field(default_factory=list)
     next_action: dict[str, Any] | None = None
 

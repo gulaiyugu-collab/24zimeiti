@@ -256,7 +256,11 @@ class ProductRelevanceApiTests(unittest.TestCase):
         self.assertEqual(200, response.status_code)
         payload = response.json()
         report = payload["report"]
-        self.assertEqual("completed_research_draft", report["generation"]["status"])
+        self.assertEqual(
+            "completed_research_draft",
+            payload["diagnostics"]["generation"]["status"],
+        )
+        self.assertNotIn("generation", report)
         self.assertEqual("no_product", report["product_relevance"]["status"])
         self.assertNotIn("经模型或人工完成的内容蒸馏", payload["missing"])
         self.assertEqual([], report["requirements"]["blocking_for_interpretation"])

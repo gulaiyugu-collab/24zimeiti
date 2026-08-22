@@ -103,7 +103,10 @@ class V02ApiTests(unittest.TestCase):
         self.assertFalse(report["recommended_script"]["publishable"])
         self.assertFalse(report["publishing_package"]["publishable"])
         self.assertFalse(report["risk_gate"]["publishable"])
-        self.assertEqual("not_configured", report["generation"]["status"])
+        self.assertEqual(
+            "not_configured", payload["diagnostics"]["generation"]["status"]
+        )
+        self.assertNotIn("generation", report)
 
     def test_market_selection_is_saved_but_localization_stays_disabled(self) -> None:
         response = self.client.post(
@@ -344,7 +347,11 @@ class V02ApiTests(unittest.TestCase):
         payload = response.json()
         report = payload["report"]
         self.assertEqual("partial", payload["status"])
-        self.assertEqual("completed_research_draft", report["generation"]["status"])
+        self.assertEqual(
+            "completed_research_draft",
+            payload["diagnostics"]["generation"]["status"],
+        )
+        self.assertNotIn("generation", report)
         self.assertEqual("三种附件，三个任务", report["recommended_script"]["title"])
         self.assertFalse(report["delivery"]["publishable"])
         self.assertFalse(report["recommended_script"]["publishable"])
@@ -382,9 +389,12 @@ class V02ApiTests(unittest.TestCase):
         self.assertEqual("partial", payload["status"])
         self.assertEqual(
             "failed_research_draft_fallback",
-            report["generation"]["status"],
+            payload["diagnostics"]["generation"]["status"],
         )
-        self.assertIn("[redacted]", report["generation"]["message"])
+        self.assertIn(
+            "[redacted]", payload["diagnostics"]["generation"]["message"]
+        )
+        self.assertNotIn("generation", report)
         self.assertFalse(report["delivery"]["publishable"])
         self.assertFalse(report["risk_gate"]["publishable"])
         self.assertNotIn(secret, response.text)

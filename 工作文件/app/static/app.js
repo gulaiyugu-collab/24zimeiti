@@ -40,7 +40,6 @@ const elements = {
   localizationSummary: document.querySelector("#localizationSummary"),
   evidenceRisks: document.querySelector("#evidenceRisks"),
   riskReview: document.querySelector("#riskReview"),
-  additionalReport: document.querySelector("#additionalReport"),
   quickSourceMeta: document.querySelector("#quickSourceMeta"),
   quickSummary: document.querySelector("#quickSummary"),
   quickWhatHappens: document.querySelector("#quickWhatHappens"),
@@ -158,8 +157,22 @@ const VALUE_LABELS = {
   rule_based: "规则初判", model: "模型判断", user_confirmation: "用户确认", client_product_input: "用户商品资料",
   rule_based_with_model_note: "规则优先，保留模型建议",
   product_rewrite_or_publish_only: "仅商品改写或正式发布时",
-  not_applicable: "不适用"
+  not_applicable: "不适用", local_asr: "本地语音转写",
+  local_asr_required: "需要本地语音转写", retrieved_public_metadata: "公开页面信息",
+  retrieved_ephemeral_browser: "公开页面临时采集", retrieved: "已获取",
+  transcript_path: "字幕来源", timed_transcript: "带时间码字幕",
+  pending_runtime_step: "等待运行处理", runtime_generated: "本次运行生成",
+  automatic_acquisition: "自动采集与转写", registered_fixture: "预先审阅样本",
+  worker_transcript: "自动取得的字幕", missing: "缺失"
 };
+
+const INTERNAL_REPORT_KEYS = new Set([
+  "acquisition", "generation", "provider_metadata", "usage", "request_id", "response_format",
+  "job_id", "manifest_url", "manifest_schema_version", "stable_id", "analysis_ready",
+  "source_artifact", "evidence_summary", "artifact_name", "artifact_url", "sha256", "size_bytes",
+  "prompt_tokens", "completion_tokens", "total_tokens", "prompt_cache_hit_tokens",
+  "prompt_cache_miss_tokens"
+]);
 
 const SCRIPT_KEYS = new Set([
   "script", "full_script", "script_text", "full_text", "spoken_script", "voiceover_script",
@@ -200,9 +213,10 @@ function textValue(value) {
 }
 
 function labelFor(key) {
+  if (INTERNAL_REPORT_KEYS.has(key)) return "";
   if (LABELS[key]) return LABELS[key];
   if (/^[\u3400-\u9fff]/u.test(key)) return key;
-  return "补充信息";
+  return "";
 }
 
 function clearNode(node) {
@@ -267,7 +281,9 @@ function renderArray(values, key = "") {
 
 function renderObject(object, fallbackTitle = "") {
   const wrapper = createElement("div", "object-content");
-  const entries = Object.entries(object || {}).filter(([, value]) => isPresent(value));
+  const entries = Object.entries(object || {}).filter(
+    ([key, value]) => isPresent(value) && labelFor(key)
+  );
   if (!entries.length) {
     wrapper.appendChild(createElement("p", "empty-value", "暂无可展示内容"));
     return wrapper;
@@ -320,7 +336,11 @@ function renderSideSection(container, title, data) {
   }
   const list = createElement("dl", "data-list");
   Object.entries(data)
-    .filter(([key, value]) => isPresent(value) && !["url", "canonical_url", "transcript", "source_text"].includes(key))
+    .filter(([key, value]) => (
+      isPresent(value)
+      && labelFor(key)
+      && !["url", "canonical_url", "transcript", "source_text"].includes(key)
+    ))
     .forEach(([key, value]) => {
       if (key === "public_comment_summary") {
         const row = createElement("div", "data-row data-row--collapsible");
@@ -373,38 +393,14 @@ function createMetricEvidence(metricKey, acquisition) {
   details.appendChild(createElement("summary", "", "查看依据"));
   const content = createElement("div", "metric-evidence__content");
   const list = createElement("dl", "metric-evidence__list");
-  appendEvidenceRow(list, "证据强度", acquisition?.evidence_strength);
-  appendEvidenceRow(list, "采集完成时间", formatEvidenceTime(acquisition?.completed_at));
-  appendEvidenceRow(list, "采集任务", acquisition?.job_id, "metric-evidence__mono");
-  appendEvidenceRow(
-    list,
-    "来源文件校验值",
-    acquisition?.source_artifact?.sha256,
-    "metric-evidence__mono"
-  );
+  appendEvidenceRow(list, "资料来源", acquisition?.evidence_strength);
+  appendEvidenceRow(list, "采集时间", formatEvidenceTime(acquisition?.completed_at));
   content.appendChild(list);
-
-  const links = createElement("div", "metric-evidence__links");
-  if (acquisition?.source_artifact?.url) {
-    const sourceLink = createElement("a", "", "打开源证据");
-    sourceLink.href = acquisition.source_artifact.url;
-    sourceLink.target = "_blank";
-    sourceLink.rel = "noopener noreferrer";
-    links.appendChild(sourceLink);
-  }
-  if (acquisition?.manifest_url) {
-    const manifestLink = createElement("a", "", "查看证据清单");
-    manifestLink.href = acquisition.manifest_url;
-    manifestLink.target = "_blank";
-    manifestLink.rel = "noopener noreferrer";
-    links.appendChild(manifestLink);
-  }
-  if (links.children.length) content.appendChild(links);
   details.appendChild(content);
   return details;
 }
 
-function renderSourceSummary(container, source) {
+function renderSourceSummary(container, source, acquisition = {}) {
   const overview = {};
   ["platform", "author", "content", "acquisition_mode", "retrieval_status", "missing"].forEach((key) => {
     if (isPresent(source?.[key])) overview[key] = source[key];
@@ -424,7 +420,7 @@ function renderSourceSummary(container, source) {
     row.appendChild(createElement("dt", "", labelFor(key)));
     const detail = createElement("dd");
     detail.appendChild(createElement("strong", "metric-row__value", textValue(value)));
-    if (source?.acquisition) detail.appendChild(createMetricEvidence(key, source.acquisition));
+    if (isPresent(acquisition)) detail.appendChild(createMetricEvidence(key, acquisition));
     row.appendChild(detail);
     list.appendChild(row);
   });
@@ -1180,6 +1176,8 @@ function renderQuickView(payload, report, source, partial = false) {
 function showCompleted(payload, partial = false) {
   const report = payload.report || payload;
   const source = report.source || payload.source || {};
+  const diagnostics = payload.diagnostics || {};
+  const acquisition = diagnostics.acquisition || source.acquisition || {};
   const delivery = report.delivery || payload.delivery || {};
   const recommended = report.recommended_script || report.recommended_draft || payload.recommended_script || payload.recommended_draft || {};
   const shooting = report.shooting_table || report.shooting_plan || payload.shooting_table || payload.shooting_plan || {};
@@ -1228,7 +1226,7 @@ function showCompleted(payload, partial = false) {
   renderReportSection(elements.contentPackage, "创作说明", "推荐稿之外的定位与原创边界。", contentExtras);
   renderReportSection(elements.publishingPackage, "发布配套", "标题、发布文案、行动引导和评论回复均继承当前交付状态。", isPresent(publishing) ? publishing : publishingFallback(content));
 
-  renderSourceSummary(elements.sourceSummary, source);
+  renderSourceSummary(elements.sourceSummary, source, acquisition);
   renderSideSection(elements.qualitySummary, "证据边界", report.evidence_boundary || report.data_quality || payload.evidence_boundary || payload.data_quality || {});
   const asrDetails = objectWithout(asr, ["status", "mode", "selected_provider", "provider", "model", "language", "message", "paid_api_called", "media_required"]);
   const asrOverview = objectWithout(asr, Object.keys(asrDetails));
@@ -1273,21 +1271,6 @@ function showCompleted(payload, partial = false) {
     evidenceSummary
   );
   renderReportSection(elements.riskReview, "风险审阅", "健康与产品相关表达需结合实际资质和平台规则复核。", isPresent(evidenceRisk) ? {} : risks);
-
-  const handledKeys = new Set([
-    "report_schema_version", "report_id", "title", "source", "evidence_boundary", "data_quality", "delivery",
-    "quick_result", "recommended_script", "recommended_draft", "shooting_table", "shooting_plan",
-    "publishing_package", "localization", "product_relevance", "product_requirements", "requirements", "evidence_and_risk", "evidence_and_risks",
-    "asr", "distillation", "traffic_assessment", "calibration", "audience_insights", "content_package",
-    "compliance", "risk_review", "risk_gate", "material", "analysis_mode", "legacy_report_schema_version"
-  ]);
-  const additional = Object.fromEntries(Object.entries(report).filter(([key, value]) => !handledKeys.has(key) && isPresent(value)));
-  renderCollapsibleReportSection(
-    elements.additionalReport,
-    "补充分析",
-    "兼容展示报告中的其他有效字段。",
-    additional
-  );
 
   currentScript = isPresent(recommended) ? findScript(recommended, "recommended_script") : findScript(content);
   elements.copyScriptButton.hidden = !currentScript;

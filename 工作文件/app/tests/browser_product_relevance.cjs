@@ -87,8 +87,7 @@ async function layout(page) {
       "audienceInsights",
       "localizationSummary",
       "evidenceRisks",
-      "riskReview",
-      "additionalReport"
+      "riskReview"
     ];
     return {
       viewport: window.innerWidth,
@@ -128,6 +127,8 @@ async function runDesktop(browser) {
   record("非商品隐藏商品输入", await page.locator("#productContextField").isHidden());
   record("非商品不显示商品缺口组", await page.locator(".product-relevance__group--requirements").count() === 0);
   record("资料盘点显示可选增强", (await page.locator("#requirementsSummary").innerText()).includes("可选增强"));
+  const nonProductText = await page.locator("#reportLayout").textContent();
+  record("甲方页面不显示内部补充数据", !["补充信息", "json_object", "prompt_tokens", "/api/acquisition/jobs/", "local_asr", "acq_"].some((value) => nonProductText.includes(value)), nonProductText);
   await page.screenshot({
     path: path.join(outputDir, "desktop_no_product.png"),
     fullPage: true,
@@ -211,6 +212,9 @@ async function runRegisteredFixture(browser) {
   record("完成解读没有必补项", payload.report?.requirements?.blocking_for_interpretation?.length === 0, JSON.stringify(payload.report?.requirements));
   record("正式入口显示独立商品栏", await page.locator("#productRelevance").isVisible());
   record("正式入口显示商品后续资料", await page.locator(".product-relevance__group--requirements li").count() >= 1);
+  const fixtureText = await page.locator("#reportLayout").textContent();
+  record("正式入口不显示内部补充数据", !["补充信息", "json_object", "prompt_tokens", "/api/acquisition/jobs/", "local_asr", "acq_"].some((value) => fixtureText.includes(value)), fixtureText);
+  record("正式入口不显示 64 位文件哈希", !/\b[a-f0-9]{64}\b/i.test(fixtureText), fixtureText);
   const fixtureLayout = await layout(page);
   record("正式入口无横向溢出", !fixtureLayout.overflow, JSON.stringify(fixtureLayout));
   await page.screenshot({

@@ -506,7 +506,7 @@ class AcquisitionJobApiTests(unittest.TestCase):
 
         self.assertEqual(200, response.status_code)
         payload = response.json()
-        acquisition = payload["source"]["acquisition"]
+        acquisition = payload["diagnostics"]["acquisition"]
         self.assertEqual("partial", payload["status"])
         self.assertEqual(queued["job_id"], acquisition["job_id"])
         self.assertEqual("local_asr", acquisition["transcript"]["source"])
@@ -518,6 +518,8 @@ class AcquisitionJobApiTests(unittest.TestCase):
         self.assertEqual("local_asr", payload["report"]["evidence_and_risk"]["transcript_status"])
         self.assertEqual("completed", payload["report"]["asr"]["status"])
         self.assertNotIn("实时公开指标", payload["missing"])
+        self.assertNotIn("acquisition", payload["source"])
+        self.assertNotIn("acquisition", payload["report"])
 
     def test_registered_fixture_uses_reviewed_analysis_without_runtime_transcript(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -540,12 +542,14 @@ class AcquisitionJobApiTests(unittest.TestCase):
 
         self.assertEqual(200, response.status_code)
         payload = response.json()
-        acquisition = payload["source"]["acquisition"]
+        acquisition = payload["diagnostics"]["acquisition"]
         self.assertEqual("completed", payload["status"])
         self.assertEqual("registered_fixture", acquisition["acquisition_mode"])
         self.assertEqual("reviewed_fixture", acquisition["evidence_strength"])
         self.assertEqual(64, len(acquisition["source_artifact"]["sha256"]))
         self.assertIsNone(acquisition["transcript"])
+        self.assertNotIn("acquisition", payload["source"])
+        self.assertNotIn("acquisition", payload["report"])
 
     def test_non_completed_acquisition_cannot_enter_analysis(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

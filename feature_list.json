@@ -250,6 +250,28 @@
         "产出\\验真\\p2_product_relevance_formal_20260812_r4 的正式 127.0.0.1:8792 登记样本验收 11/11 通过",
         "正式服务健康状态 version=0.3.0、paid_content_enabled=true，登记样本 blocking_for_interpretation 与顶层 missing 均为 0"
       ]
+    },
+    {
+      "id": "P2-08",
+      "priority": 13,
+      "title": "甲方结果页技术元数据收敛",
+      "status": "completed",
+      "passes": true,
+      "acceptance": [
+        "generation 与 acquisition 诊断数据不进入甲方 report 或 source",
+        "页面不再使用补充分析兜底展示未知字段",
+        "数字旁查看依据只显示通俗的资料来源和采集时间",
+        "页面不出现补充信息、Token、json_object、采集任务号、内部 API 路径或 64 位文件哈希",
+        "桌面、390px、真实缓存采集和登记样本无控制台错误、请求错误或布局异常"
+      ],
+      "evidence": [
+        "AnalysisResponse 新增 diagnostics；generation 与 acquisition 已从用户报告结构迁出",
+        "Python 全量回归 65/65、compileall 与 JavaScript 语法检查通过",
+        "零付费独立服务 127.0.0.1:8793 的商品属性桌面/390px/登记样本浏览器验收 27/27 通过",
+        "真实 TikTok 完成缓存与登记样本浏览器验收 94/94 通过；技术字段禁显、折叠依据、控制台、请求、响应和布局检查均为 0 失败",
+        "正式 127.0.0.1:8792 已重启到当前代码，version=0.3.0、paid_content_enabled=true；登记样本与技术字段禁显验收 13/13 通过",
+        "验收截图和结果位于 工作文件\\app\\.temp\\ui-cleanup-browser"
+      ]
     }
   ]
 }

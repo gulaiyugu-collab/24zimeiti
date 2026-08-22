@@ -56,7 +56,7 @@ fs.mkdirSync(outputDir, { recursive: true });
     await page.waitForFunction(() => document.querySelector("#analyzeButton .button__label")?.textContent === "生成完整脚本");
 
     const requestBody = analysisRequest?.postDataJSON() || {};
-    const generation = payload?.report?.generation || {};
+    const generation = payload?.diagnostics?.generation || {};
     const script = payload?.report?.recommended_script || {};
     const shootingRows = Array.isArray(payload?.report?.shooting_table?.rows) ? payload.report.shooting_table.rows : [];
     const renderedDraft = await page.locator("#recommendedDraft").innerText();
@@ -73,6 +73,9 @@ fs.mkdirSync(outputDir, { recursive: true });
     record("publishing package returned", Array.isArray(payload?.report?.publishing_package?.titles) && payload.report.publishing_package.titles.length >= 1);
     record("new review wording is visible", bodyText.includes("发布前审核"));
     record("old gate wording is absent", !bodyText.includes("门禁"));
+    record("customer page hides generic supplemental labels", !bodyText.includes("补充信息"), bodyText);
+    record("customer page hides internal diagnostics", !["json_object", "prompt_tokens", "completion_tokens", "/api/acquisition/jobs/", "local_asr", "acq_"].some((value) => bodyText.includes(value)), bodyText);
+    record("customer page hides raw hashes", !/\b[a-f0-9]{64}\b/i.test(bodyText), bodyText);
     record("paid button resets correctly", (await page.locator("#analyzeButton .button__label").textContent()) === "生成完整脚本");
     record("no console errors", diagnostics.consoleErrors.length === 0, JSON.stringify(diagnostics.consoleErrors));
     record("no page errors", diagnostics.pageErrors.length === 0, JSON.stringify(diagnostics.pageErrors));

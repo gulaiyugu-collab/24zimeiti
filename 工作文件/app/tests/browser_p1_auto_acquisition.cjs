@@ -289,7 +289,7 @@ function numericMetricKeys(payload) {
 
 async function verifyMetricEvidence(page, payload, name) {
   const metricKeys = numericMetricKeys(payload);
-  const acquisition = payload?.source?.acquisition || {};
+  const acquisition = payload?.diagnostics?.acquisition || {};
   const evidenceControls = page.locator("details.metric-evidence");
   const renderedKeys = await evidenceControls.evaluateAll((nodes) => nodes.map((node) => node.dataset.evidenceFor));
   record(`${name}: numeric metrics available`, metricKeys.length > 0, JSON.stringify(metricKeys));
@@ -320,30 +320,21 @@ async function verifyMetricEvidence(page, payload, name) {
       text: node.innerText,
       links: [...node.querySelectorAll("a")].map((link) => ({ text: link.textContent.trim(), href: link.href }))
     }));
-    const hash = acquisition?.source_artifact?.sha256 || "";
-    const expectedLinks = [acquisition?.source_artifact?.url, acquisition?.manifest_url].filter(Boolean).length;
-    const fieldsPresent = expanded.text.includes("证据强度")
-      && expanded.text.includes("采集完成时间")
+    const fieldsPresent = expanded.text.includes("资料来源")
+      && expanded.text.includes("采集时间")
       && !expanded.text.includes("未记录")
-      && expanded.text.includes(acquisition.job_id || "__missing_job_id__")
-      && /^[a-f0-9]{64}$/.test(hash)
-      && expanded.text.includes(hash)
       && !expanded.text.includes(acquisition.evidence_strength || "__missing_strength__");
-    record(`${name}: ${key} evidence fields complete and localized`, fieldsPresent, expanded.text);
+    const internalValuesHidden = !expanded.text.includes(acquisition.job_id || "__missing_job_id__")
+      && !expanded.text.includes(acquisition?.source_artifact?.sha256 || "__missing_hash__")
+      && expanded.links.length === 0;
+    record(`${name}: ${key} evidence is compact and localized`, fieldsPresent, expanded.text);
     record(
-      `${name}: ${key} exposes source and manifest links`,
-      expanded.links.length === expectedLinks && expectedLinks === 2,
-      JSON.stringify(expanded.links)
+      `${name}: ${key} hides internal ids, hashes, and api links`,
+      internalValuesHidden,
+      JSON.stringify(expanded)
     );
 
     if (index === 0) {
-      const statuses = [];
-      for (const link of expanded.links) {
-        const response = await page.context().request.get(link.href);
-        statuses.push({ text: link.text, status: response.status() });
-        await response.dispose();
-      }
-      record(`${name}: evidence links return http 200`, statuses.every((item) => item.status === 200), JSON.stringify(statuses));
       const metricSection = details.locator("xpath=ancestor::section[contains(concat(' ', normalize-space(@class), ' '), ' metric-section ')]");
       await captureIsolatedComponent(page, metricSection, `${name}_metric_evidence_open`);
       const layout = await layoutEvidence(page);
@@ -361,9 +352,13 @@ async function verifyMetricEvidence(page, payload, name) {
 
 async function verifyResultBoundary(page, payload, name, expectFullPackage) {
   const reportText = await page.locator("#reportLayout").innerText();
+  const reportContent = await page.locator("#reportLayout").textContent();
   const rawEnums = ["runtime_public_snapshot", "reviewed_fixture", "needs_human_review", "research_draft", "publish_ready"];
+  const internalMarkers = ["补充信息", "json_object", "prompt_tokens", "completion_tokens", "/api/acquisition/jobs/", "local_asr", "acq_"];
   record(`${name}: quick conclusion uses visible user language`, (await page.locator("#quickSummary").innerText()).trim().length > 10);
   record(`${name}: technical enums are translated`, rawEnums.every((value) => !reportText.includes(value)), reportText);
+  record(`${name}: customer report hides internal metadata`, internalMarkers.every((value) => !reportContent.includes(value)), reportContent);
+  record(`${name}: customer report hides 64 character hashes`, !/\b[a-f0-9]{64}\b/i.test(reportContent), reportContent);
 
   const stageScript = (await page.locator("#stageScriptStatus").innerText()).trim();
   const stageShooting = (await page.locator("#stageShootingStatus").innerText()).trim();
@@ -415,12 +410,12 @@ async function runLivePath(page, name) {
   record(`${name}: transcript starts empty`, (await page.locator("#transcriptInput").inputValue()) === "");
   const { response, payload } = await submitAndWait(page, name);
 
-  const acquisition = payload?.source?.acquisition || {};
+  const acquisition = payload?.diagnostics?.acquisition || {};
   record(`${name}: analysis http 200`, response.status() === 200, response.status());
   record(`${name}: expected live platform`, payload?.platform === expectedLivePlatform, payload?.platform);
   record(`${name}: automatic transcript provenance`, acquisition?.transcript?.source === "local_asr", JSON.stringify(acquisition?.transcript));
   record(`${name}: transcript hash retained`, /^[a-f0-9]{64}$/.test(acquisition?.transcript?.sha256 || ""));
-  const generation = payload?.report?.generation || {};
+  const generation = payload?.diagnostics?.generation || {};
   record(`${name}: paid content generation not called`, generation.paid_api_called === false, JSON.stringify(generation));
   record(`${name}: client transcript remains empty`, (await page.locator("#transcriptInput").inputValue()) === "");
   record(`${name}: report visible`, await page.locator("#reportLayout").isVisible());
@@ -451,7 +446,7 @@ async function runFixturePath(page, name) {
   await page.waitForFunction(() => document.querySelector("#urlInput")?.value.includes("douyin.com/video/"));
   record(`${name}: fixture transcript remains empty`, (await page.locator("#transcriptInput").inputValue()) === "");
   const { response, payload } = await submitAndWait(page, name);
-  const acquisition = payload?.source?.acquisition || {};
+  const acquisition = payload?.diagnostics?.acquisition || {};
   record(`${name}: fixture analysis http 200`, response.status() === 200, response.status());
   record(`${name}: registered fixture completed`, payload.status === "completed", payload.status);
   record(`${name}: fixture provenance retained`, acquisition.acquisition_mode === "registered_fixture", JSON.stringify(acquisition));
