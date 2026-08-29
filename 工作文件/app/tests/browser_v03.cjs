@@ -42,6 +42,12 @@ async function capture(page, name) {
   screenshots.push(file);
 }
 
+async function captureViewport(page, name) {
+  const file = path.join(outputDir, `${name}.png`);
+  await page.screenshot({ path: file, fullPage: false, animations: "disabled" });
+  screenshots.push(file);
+}
+
 async function layoutCheck(page) {
   return page.evaluate(() => ({
     viewport: window.innerWidth,
@@ -56,26 +62,58 @@ async function runViewport(browser, name, viewport) {
   wireDiagnostics(page);
 
   await page.goto(baseUrl, { waitUntil: "networkidle" });
-  record(`${name}: v0.3 标识`, await page.locator(".brand__version").textContent() === "v0.3");
+  await page.evaluate(() => localStorage.removeItem("project024_experience_mode"));
+  await page.reload({ waitUntil: "networkidle" });
+  record(`${name}: 产品工作台标识`, await page.locator(".brand__edition").textContent() === "内容工作台");
+  record(`${name}: 双体验模式`, await page.locator(".experience-option[data-experience-mode]").count() === 2);
   record(
-    `${name}: 首屏标题`,
-    (await page.locator("#workspaceTitle").textContent()).includes("视频链接")
+    `${name}: 默认安心交付`,
+    (await page.locator("#workspaceTitle").textContent()).includes("按步骤") &&
+      await page.locator(".experience-option[data-experience-mode='guided']").getAttribute("aria-checked") === "true"
   );
-  record(`${name}: 主按钮`, await page.locator("#analyzeButton").innerText() === "快速看懂");
+  record(`${name}: 安心交付主按钮`, await page.locator("#analyzeButton").innerText() === "交给系统处理");
+  await page.locator("#urlInput").fill("");
+  await page.locator("#analyzeButton").click();
+  record(
+    `${name}: 空链接点击有明确反馈`,
+    await page.locator("#urlError").textContent() === "请先粘贴一个公开内容链接。" &&
+      (await page.locator("#formMessage").textContent()).includes("还没有链接") &&
+      await page.locator("#formMessage").isVisible()
+  );
+
+  await page.locator(".experience-option[data-experience-mode='companion']").click();
+  record(
+    `${name}: 创作陪跑切换`,
+    (await page.locator("#workspaceTitle").textContent()).includes("你的下一条内容") &&
+      await page.locator("#analyzeButton").innerText() === "生成我的原创稿"
+  );
+  await page.locator("#supplementTrigger").click();
+  record(`${name}: 补充资料可展开`, await page.locator("#supplementDetails").evaluate((node) => node.open));
+  await page.locator("#supplementTrigger").click();
+  record(`${name}: 移动/桌面工作总览存在`, await page.locator(".creator-overview").count() === 1);
+  await page.reload({ waitUntil: "networkidle" });
+  record(
+    `${name}: 使用方式刷新保留`,
+    await page.locator(".experience-option[data-experience-mode='companion']").getAttribute("aria-checked") === "true"
+  );
+  await captureViewport(page, `${name}_workspace`);
 
   await page.locator("#demoButton").click();
+  await page.locator("#supplementDetails").evaluate((node) => { node.open = true; });
+  await page.locator("#transcriptInput").fill("这是浏览器零付费回归使用的字幕，不触发公开采集或外部模型。");
   await page.locator("#analyzeButton").click();
-  await page.locator("#quickView").waitFor({ state: "visible", timeout: 10000 });
+  await page.locator("#reportLayout").waitFor({ state: "visible", timeout: 10000 });
+  await page.locator("#gateQuick").waitFor({ state: "visible", timeout: 10000 });
   const summary = (await page.locator("#quickSummary").textContent()).trim();
   record(`${name}: 一句话结果`, summary.length >= 10, summary);
   record(`${name}: 内容步骤`, await page.locator("#quickWhatHappens li").count() >= 1);
   record(`${name}: 可借鉴方法`, await page.locator("#quickTransferable li").count() >= 1);
-  record(`${name}: 完整报告默认收起`, !(await page.locator("#advancedResults").evaluate((node) => node.open)));
+  record(`${name}: 四关路径存在`, await page.locator("#pathway .gate").count() === 4);
+  record(`${name}: 报告三阶段存在`, await page.locator("#stageScript, #stageShooting, #stagePublish").count() === 3);
   await capture(page, `${name}_quick`);
 
-  await page.locator("#advancedToggleButton").click();
-  record(`${name}: 完整报告可展开`, await page.locator("#advancedResults").evaluate((node) => node.open));
   record(`${name}: 完整脚本可见`, await page.locator("#recommendedDraft").isVisible());
+  record(`${name}: 可带入发布实验`, await page.locator("#publishExperimentButton").isVisible());
   const layout = await layoutCheck(page);
   record(`${name}: 无横向溢出`, !layout.overflow, JSON.stringify(layout));
 

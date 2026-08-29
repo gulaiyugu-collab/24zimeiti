@@ -20,6 +20,11 @@ const elements = {
   urlError: document.querySelector("#urlError"),
   formMessage: document.querySelector("#formMessage"),
   platformStatusText: document.querySelector("#platformStatusText"),
+  workspaceEyebrow: document.querySelector("#workspaceEyebrow"),
+  workspaceTitle: document.querySelector("#workspaceTitle"),
+  workspaceNote: document.querySelector("#workspaceNote"),
+  supplementNote: document.querySelector("#supplementNote"),
+  experienceOptions: Array.from(document.querySelectorAll("[data-experience-mode]")),
   resultArea: document.querySelector("#resultArea"),
   statePanel: document.querySelector("#statePanel"),
   reportLayout: document.querySelector("#reportLayout"),
@@ -27,7 +32,9 @@ const elements = {
   requirementsSummary: document.querySelector("#requirementsSummary"),
   deliverySummary: document.querySelector("#deliverySummary"),
   recommendedDraft: document.querySelector("#recommendedDraft"),
+  fullContentLayer: document.querySelector("#fullContentLayer"),
   shootingPlan: document.querySelector("#shootingPlan"),
+  visualAnalysis: document.querySelector("#visualAnalysis"),
   publishingPackage: document.querySelector("#publishingPackage"),
   sourceSummary: document.querySelector("#sourceSummary"),
   qualitySummary: document.querySelector("#qualitySummary"),
@@ -54,6 +61,8 @@ const elements = {
   stageShootingStatus: document.querySelector("#stageShootingStatus"),
   stagePublishStatus: document.querySelector("#stagePublishStatus"),
   copyScriptButton: document.querySelector("#copyScriptButton"),
+  saveDouyinTopicButton: document.querySelector("#saveDouyinTopicButton"),
+  publishExperimentButton: document.querySelector("#publishExperimentButton"),
   sourceLink: document.querySelector("#sourceLink"),
   copyFeedback: document.querySelector("#copyFeedback"),
   toast: document.querySelector("#toast")
@@ -71,7 +80,7 @@ const LABELS = {
   value: "内容", facts: "事实", inferences: "推断", limitations: "限制", missing: "缺失资料",
   missing_fields: "缺失资料", warnings: "注意事项", signals: "判断依据", summary: "内容摘要",
   content: "作品内容", core_claim: "核心主张", central_idea: "核心观点", theme: "内容主题",
-  content_demonstration: "内容演示",
+  content_demonstration: "内容示例",
   topic: "内容主题", audience: "目标受众", audience_pains: "受众痛点", pain_points: "受众痛点",
   hook: "原内容钩子", hook_mechanism: "钩子机制", hook_analysis: "钩子拆解", structure: "内容结构",
   content_structure: "内容结构", key_points: "关键信息", persuasion: "说服路径", emotional_triggers: "情绪触发",
@@ -138,9 +147,9 @@ const LABELS = {
 const VALUE_LABELS = {
   douyin: "抖音", tiktok: "TikTok", active: "已接通", planned: "计划接入", unknown: "未知平台",
   completed: "已完成", needs_input: "需要补充资料", partial: "部分证据", unsupported: "暂不支持",
-  ok: "正常", fixture: "预先审阅的演示样本", not_run: "尚未执行", user_supplied_url: "用户提交的公开链接",
+  ok: "正常", fixture: "预先审阅的内容示例", not_run: "尚未执行", user_supplied_url: "用户提交的公开链接",
   transcript_fallback: "用户补充字幕", submitted: "用户已提交", partial_evidence_record: "部分证据记录",
-  reviewed_public_fixture: "预先审阅的公开演示样本", public_url: "公开链接", public_metadata: "公开元数据",
+  reviewed_public_fixture: "预先审阅的公开内容示例", public_url: "公开链接", public_metadata: "公开元数据",
   public_metrics: "公开互动数据", chapter_summary: "章节摘要", comment_observation: "评论观察",
   verified: "已核实", verified_snapshot: "已核实快照", limited_snapshot: "有限快照",
   limited_public_sample: "有限公开评论样本", public_metadata_and_chapter_evidence: "公开元数据与章节快照",
@@ -193,6 +202,31 @@ let previousGateStates = ["locked", "locked", "locked", "locked"];
 let productRelevanceOverride = null;
 let currentProductRelevance = null;
 let currentProductRequirements = null;
+let currentPublishDraft = null;
+let currentDouyinTopicId = null;
+let currentAcquisitionJobId = null;
+let activeExperienceMode = "guided";
+const sessionMetrics = { links: 0, drafts: 0, reviews: 0 };
+
+const EXPERIENCE_MODE_KEY = "project024_experience_mode";
+const EXPERIENCE_MODES = {
+  companion: {
+    eyebrow: "创作陪跑 · 今天先完成一条",
+    title: "把这条视频，变成你的下一条内容",
+    note: "先看懂亮点，再一起打磨原创稿、拍法和发布准备。",
+    supplement: "有现成资料可以补充，没有也可以直接开始",
+    primaryQuick: "开始创作",
+    primaryFull: "生成我的原创稿"
+  },
+  guided: {
+    eyebrow: "安心交付 · 系统按步骤处理",
+    title: "粘贴视频链接，按步骤完成内容",
+    note: "不用整理字幕或研究技术设置；先贴链接，系统会告诉你下一步。",
+    supplement: "只有系统提示时才需要补充",
+    primaryQuick: "开始处理",
+    primaryFull: "交给系统处理"
+  }
+};
 
 const MAX_MEDIA_BYTES = 25 * 1024 * 1024;
 const ACQUISITION_POLL_INTERVAL_MS = 1400;
@@ -210,6 +244,50 @@ function textValue(value) {
   if (typeof value === "number") return String(value);
   if (typeof value === "string" && VALUE_LABELS[value]) return VALUE_LABELS[value];
   return String(value ?? "");
+}
+
+function readExperienceMode() {
+  try {
+    const saved = window.localStorage.getItem(EXPERIENCE_MODE_KEY);
+    return EXPERIENCE_MODES[saved] ? saved : "guided";
+  } catch {
+    return "guided";
+  }
+}
+
+function primaryActionLabel() {
+  const copy = EXPERIENCE_MODES[activeExperienceMode];
+  return requestedAnalysisMode === "full" ? copy.primaryFull : copy.primaryQuick;
+}
+
+function setExperienceMode(mode, persist = true) {
+  activeExperienceMode = EXPERIENCE_MODES[mode] ? mode : "guided";
+  const copy = EXPERIENCE_MODES[activeExperienceMode];
+  document.body.dataset.experienceMode = activeExperienceMode;
+  elements.workspaceEyebrow.textContent = copy.eyebrow;
+  elements.workspaceTitle.textContent = copy.title;
+  elements.workspaceNote.textContent = copy.note;
+  elements.supplementNote.textContent = copy.supplement;
+  elements.experienceOptions.forEach((option) => {
+    const selected = option.dataset.experienceMode === activeExperienceMode;
+    option.classList.toggle("is-active", selected);
+    option.setAttribute("aria-checked", String(selected));
+  });
+  if (!analysisInFlight) elements.analyzeLabel.textContent = primaryActionLabel();
+  if (persist) {
+    try { window.localStorage.setItem(EXPERIENCE_MODE_KEY, activeExperienceMode); } catch { /* 浏览器禁用存储时只保留本次选择 */ }
+  }
+}
+
+function renderSessionOverview() {
+  const total = document.querySelector("#sessionWorkTotal");
+  const links = document.querySelector("#sessionLinkCount");
+  const drafts = document.querySelector("#sessionDraftCount");
+  const reviews = document.querySelector("#sessionReviewCount");
+  if (total) total.textContent = String(sessionMetrics.links);
+  if (links) links.textContent = String(sessionMetrics.links);
+  if (drafts) drafts.textContent = String(sessionMetrics.drafts);
+  if (reviews) reviews.textContent = String(sessionMetrics.reviews);
 }
 
 function labelFor(key) {
@@ -788,6 +866,370 @@ function renderShootingPlan(container, shootingPlan, legacyContent) {
   container.appendChild(wrapper);
 }
 
+function safeVisualArtifactUrl(value) {
+  try {
+    const parsed = new URL(String(value || ""), window.location.origin);
+    const allowedPath = /^\/api\/acquisition\/jobs\/acq_[0-9]{8}T[0-9]{6}Z_[a-f0-9]{12}\/visual-analysis\/artifacts\/visual_frame_[0-9]{2}_[0-9]{9}ms\.jpg$/;
+    return parsed.origin === window.location.origin && allowedPath.test(parsed.pathname)
+      ? parsed.href
+      : "";
+  } catch {
+    return "";
+  }
+}
+
+function renderVisualAnalysis(container, visualAnalysis) {
+  clearNode(container);
+  if (!visualAnalysis || typeof visualAnalysis !== "object") return;
+
+  const section = createElement("section", "visual-analysis");
+  const heading = createElement("div", "visual-analysis__heading");
+  const headingCopy = createElement("div");
+  headingCopy.appendChild(createElement("p", "eyebrow", "本机画面证据"));
+  headingCopy.appendChild(createElement("h3", "", "代表帧与镜头节奏"));
+  heading.appendChild(headingCopy);
+  section.appendChild(heading);
+
+  const scene = visualAnalysis.scene_structure || {};
+  const probe = visualAnalysis.probe || {};
+  const frames = Array.isArray(visualAnalysis.frames) ? visualAnalysis.frames : [];
+  if (scene.status !== "completed") {
+    section.appendChild(createElement(
+      "p",
+      "visual-analysis__notice visual-analysis__notice--warning",
+      visualAnalysis.message || "当前没有可核对的视频媒体，未执行画面结构分析。"
+    ));
+  } else {
+    const paceLabels = { fast: "较快", moderate: "中等", slow: "较慢" };
+    const stats = createElement("dl", "visual-analysis__stats");
+    [
+      ["代表帧", `${frames.length} 张`],
+      ["候选切点", `${scene.candidate_cut_count ?? 0} 个`],
+      ["估算段落", `${scene.estimated_segment_count ?? 1} 段`],
+      ["镜头节奏", paceLabels[scene.pace] || "待判断"]
+    ].forEach(([label, value]) => {
+      const item = createElement("div");
+      item.appendChild(createElement("dt", "", label));
+      item.appendChild(createElement("dd", "", value));
+      stats.appendChild(item);
+    });
+    section.appendChild(stats);
+    const coverage = Number(probe.coverage_seconds || 0);
+    const duration = Number(probe.duration_seconds || 0);
+    section.appendChild(createElement(
+      "p",
+      "visual-analysis__notice",
+      `${coverage ? `已分析前 ${coverage.toFixed(1)} 秒` : "已完成有界分析"}${probe.truncated ? `（原视频约 ${duration.toFixed(1)} 秒，超出部分未扫描）` : ""}。候选切点和节奏是机器估算，不等于理解了画面含义。`
+    ));
+
+    const validFrames = frames
+      .map((frame) => ({ ...frame, safeUrl: safeVisualArtifactUrl(frame.artifact_url) }))
+      .filter((frame) => frame.safeUrl);
+    if (validFrames.length) {
+      const details = createElement("details", "visual-analysis__frames");
+      details.appendChild(createElement("summary", "", `查看 ${validFrames.length} 张代表帧`));
+      const grid = createElement("div", "visual-analysis__frame-grid");
+      validFrames.forEach((frame, index) => {
+        const figure = createElement("figure", "visual-analysis__frame");
+        const image = createElement("img");
+        image.src = frame.safeUrl;
+        image.alt = `代表帧 ${index + 1}，视频 ${Number(frame.timestamp_seconds || 0).toFixed(1)} 秒`;
+        image.loading = "lazy";
+        figure.appendChild(image);
+        figure.appendChild(createElement(
+          "figcaption",
+          "",
+          `${Number(frame.timestamp_seconds || 0).toFixed(1)} 秒 · ${frame.reason === "scene_cut" ? "候选切点" : "均匀取样"}`
+        ));
+        grid.appendChild(figure);
+      });
+      details.appendChild(grid);
+      section.appendChild(details);
+    }
+  }
+
+  const ocr = visualAnalysis.ocr || {};
+  if (ocr.status !== "completed") {
+    section.appendChild(createElement(
+      "p",
+      "visual-analysis__notice visual-analysis__notice--warning",
+      ocr.message || "本机未安装 OCR 引擎，未生成画面文字。"
+    ));
+  } else {
+    section.appendChild(createElement(
+      "p",
+      "visual-analysis__notice",
+      `本机 OCR 已识别 ${Number(ocr.frame_count || 0)} 张代表帧、${Number(ocr.block_count || 0)} 个去重文字块。OCR 只说明画面写了什么，低置信度文字仍需对照代表帧复核。`
+    ));
+  }
+  const vision = visualAnalysis.vision || {};
+  if (vision.status !== "completed") {
+    section.appendChild(createElement(
+      "p",
+      "visual-analysis__notice visual-analysis__notice--warning",
+      vision.message || "本地多模态画面语义当前不可用，不会用字幕推测人物、物体或动作。"
+    ));
+  } else {
+    section.appendChild(createElement(
+      "p",
+      "visual-analysis__notice",
+      `本地视觉模型已分析 ${Number(vision.successful_frame_count || 0)} 张精选代表帧，保留 ${Number(vision.observation_count || 0)} 条直接观察。复杂分屏与细小物体仍需打开对应帧复核。`
+    ));
+  }
+  container.appendChild(section);
+}
+
+function formatTimestamp(seconds) {
+  const value = Math.max(0, Number(seconds || 0));
+  const minutes = Math.floor(value / 60);
+  const remainder = value - minutes * 60;
+  return `${String(minutes).padStart(2, "0")}:${remainder.toFixed(1).padStart(4, "0")}`;
+}
+
+async function copyPlainText(text, successMessage) {
+  const value = String(text || "");
+  if (!value) return;
+  try {
+    await navigator.clipboard.writeText(value);
+    showCopyFeedback(successMessage);
+  } catch {
+    const textarea = document.createElement("textarea");
+    textarea.value = value;
+    textarea.style.position = "fixed";
+    textarea.style.opacity = "0";
+    document.body.appendChild(textarea);
+    textarea.select();
+    const copied = document.execCommand("copy");
+    textarea.remove();
+    showCopyFeedback(copied ? successMessage : "复制失败，请手动选择文字");
+  }
+}
+
+function fullContentApi(section, offset = 0, limit = 50) {
+  if (!currentAcquisitionJobId) return "";
+  return `/api/acquisition/jobs/${encodeURIComponent(currentAcquisitionJobId)}/full-content/${section}?offset=${offset}&limit=${limit}`;
+}
+
+function renderOcrItem(item) {
+  const row = createElement("li", "full-content__row");
+  const meta = createElement("div", "full-content__row-meta");
+  meta.appendChild(createElement("time", "full-content__time", formatTimestamp(item.first_seen_seconds)));
+  meta.appendChild(createElement("span", "full-content__confidence", `置信度 ${Math.round(Number(item.confidence || 0) * 100)}%`));
+  row.appendChild(meta);
+  if (typeof item.artifact_url === "string" && item.artifact_url.startsWith("/api/acquisition/jobs/")) {
+    const link = createElement("a", "full-content__frame-link", "查看对应帧");
+    link.href = item.artifact_url;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    row.appendChild(link);
+  }
+  row.appendChild(createElement("p", "full-content__text", item.text));
+  return row;
+}
+
+function renderVisionEvidenceGroup(row, item, evidenceState, label, fallbackItems) {
+  const evidence = Array.isArray(item.visual_evidence)
+    ? item.visual_evidence.filter((entry) => entry && entry.evidence_state === evidenceState)
+    : [];
+  const fallback = Array.isArray(fallbackItems) ? fallbackItems : [];
+  if (!evidence.length && !fallback.length) return;
+  const group = createElement("div", "full-content__source");
+  group.appendChild(createElement("strong", "", label));
+  if (evidence.length) {
+    evidence.forEach((entry) => {
+      const line = createElement("div", "full-content__visual-evidence");
+      line.appendChild(createElement("p", "full-content__text", entry.description));
+      if (typeof entry.artifact_url === "string" && entry.artifact_url.startsWith("/api/acquisition/jobs/")) {
+        const link = createElement("a", "full-content__inline-frame-link", "查看对应帧");
+        link.href = entry.artifact_url;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        line.appendChild(link);
+      }
+      group.appendChild(line);
+    });
+  } else {
+    group.appendChild(createElement("p", "full-content__text", fallback.join(" · ")));
+  }
+  row.appendChild(group);
+}
+
+function renderTimelineItem(item) {
+  const row = createElement("li", "full-content__row full-content__timeline-row");
+  row.appendChild(createElement("time", "full-content__time", `${formatTimestamp(item.start)}–${formatTimestamp(item.end)}`));
+  if (item.spoken_text) {
+    const spoken = createElement("div", "full-content__source");
+    spoken.appendChild(createElement("strong", "", "口播"));
+    spoken.appendChild(createElement("p", "full-content__text", item.spoken_text));
+    row.appendChild(spoken);
+  }
+  if (Array.isArray(item.on_screen_text) && item.on_screen_text.length) {
+    const screen = createElement("div", "full-content__source");
+    screen.appendChild(createElement("strong", "", "画面文字"));
+    screen.appendChild(createElement("p", "full-content__text", item.on_screen_text.join(" · ")));
+    row.appendChild(screen);
+  }
+  renderVisionEvidenceGroup(row, item, "observed", "画面观察", item.visual_observations);
+  renderVisionEvidenceGroup(row, item, "inferred", "可能推断（需复核）", item.visual_inferences);
+  return row;
+}
+
+function createPagedFullContent(title, section, renderItem, options = {}) {
+  const details = createElement("details", "full-content__details");
+  details.dataset.fullContent = section;
+  details.appendChild(createElement("summary", "", title));
+  const body = createElement("div", "full-content__body");
+  const status = createElement("p", "full-content__status", "等待展开");
+  const list = createElement("ol", "full-content__list");
+  const actions = createElement("div", "full-content__actions");
+  const loadMore = createElement("button", "button button--secondary full-content__load", "继续加载");
+  loadMore.type = "button";
+  loadMore.hidden = true;
+  actions.appendChild(loadMore);
+  if (options.copyAll) {
+    const copy = createElement("button", "button button--secondary", "复制全文");
+    copy.type = "button";
+    copy.addEventListener("click", options.copyAll);
+    actions.appendChild(copy);
+  }
+  body.append(status, list, actions);
+  details.appendChild(body);
+
+  let offset = 0;
+  let loading = false;
+  let initialized = false;
+  async function load() {
+    if (loading || !currentAcquisitionJobId) return;
+    loading = true;
+    loadMore.disabled = true;
+    status.textContent = offset ? "继续读取…" : "正在读取…";
+    try {
+      const payload = await requestJson(
+        fullContentApi(section, offset, 50),
+        { headers: { "Accept": "application/json" } },
+        "完整内容读取失败。"
+      );
+      if (payload.status !== "completed") {
+        status.textContent = payload.message || "当前没有可显示的内容。";
+        loadMore.hidden = true;
+        return;
+      }
+      (payload.items || []).forEach((item) => list.appendChild(renderItem(item)));
+      offset += (payload.items || []).length;
+      status.textContent = `已显示 ${offset} / ${payload.total_items}`;
+      loadMore.hidden = !payload.has_more;
+    } catch (error) {
+      status.textContent = error instanceof Error ? error.message : "完整内容读取失败。";
+      status.classList.add("full-content__status--error");
+    } finally {
+      loading = false;
+      loadMore.disabled = false;
+    }
+  }
+  details.addEventListener("toggle", () => {
+    if (details.open && !initialized) {
+      initialized = true;
+      load();
+    }
+  });
+  loadMore.addEventListener("click", load);
+  return details;
+}
+
+function createTranscriptFullContent(title) {
+  const details = createElement("details", "full-content__details");
+  details.dataset.fullContent = "transcript";
+  details.appendChild(createElement("summary", "", title));
+  const body = createElement("div", "full-content__body");
+  const status = createElement("p", "full-content__status", "等待展开");
+  const transcript = createElement("p", "script-block full-content__transcript-text");
+  transcript.hidden = true;
+  const actions = createElement("div", "full-content__actions");
+  const copy = createElement("button", "button button--secondary", "复制全文");
+  copy.type = "button";
+  actions.appendChild(copy);
+  body.append(status, transcript, actions);
+  details.appendChild(body);
+
+  let payloadPromise = null;
+  let loadedPayload = null;
+
+  async function loadTranscript() {
+    if (loadedPayload) return loadedPayload;
+    if (!currentAcquisitionJobId) return null;
+    status.hidden = false;
+    status.classList.remove("full-content__status--error");
+    status.textContent = "正在读取…";
+    if (!payloadPromise) {
+      payloadPromise = requestJson(
+        `/api/acquisition/jobs/${encodeURIComponent(currentAcquisitionJobId)}/full-content/transcript-text`,
+        { headers: { "Accept": "application/json" } },
+        "完整口播读取失败。"
+      );
+    }
+    try {
+      const payload = await payloadPromise;
+      if (payload.status !== "completed" || typeof payload.text !== "string") {
+        throw new Error(payload.message || "当前没有可显示的完整口播。");
+      }
+      loadedPayload = payload;
+      transcript.textContent = payload.text;
+      transcript.hidden = false;
+      status.hidden = true;
+      return payload;
+    } catch (error) {
+      payloadPromise = null;
+      status.textContent = error instanceof Error ? error.message : "完整口播读取失败。";
+      status.classList.add("full-content__status--error");
+      return null;
+    }
+  }
+
+  details.addEventListener("toggle", () => {
+    if (details.open && !loadedPayload) loadTranscript();
+  });
+  copy.addEventListener("click", async () => {
+    const payload = await loadTranscript();
+    if (payload) await copyPlainText(payload.text, "完整口播全文已复制");
+  });
+  return details;
+}
+
+function renderFullContentLayer(container) {
+  clearNode(container);
+  if (!currentScript && !currentAcquisitionJobId) return;
+  const section = createElement("section", "full-content");
+  const heading = createElement("div", "full-content__heading");
+  heading.appendChild(createElement("p", "eyebrow", "完整内容"));
+  heading.appendChild(createElement("h3", "", "按需查看全文"));
+  section.appendChild(heading);
+
+  if (currentAcquisitionJobId) {
+    section.appendChild(createTranscriptFullContent("查看完整口播全文"));
+    section.appendChild(createPagedFullContent("查看画面文字全文", "ocr", renderOcrItem));
+    section.appendChild(createPagedFullContent("查看完整内容时间线", "timeline", renderTimelineItem));
+  }
+
+  const original = createElement("details", "full-content__details");
+  original.dataset.fullContent = "original-script";
+  original.appendChild(createElement("summary", "", "查看完整原创稿"));
+  const originalBody = createElement("div", "full-content__body");
+  if (currentScript) {
+    originalBody.appendChild(createElement("p", "script-block full-content__script", currentScript));
+    const actions = createElement("div", "full-content__actions");
+    const copy = createElement("button", "button button--secondary", "复制原创稿");
+    copy.type = "button";
+    copy.addEventListener("click", () => copyPlainText(currentScript, "完整原创稿已复制"));
+    actions.appendChild(copy);
+    originalBody.appendChild(actions);
+  } else {
+    originalBody.appendChild(createElement("p", "full-content__status", "当前尚未形成完整原创稿。"));
+  }
+  original.appendChild(originalBody);
+  section.appendChild(original);
+  container.appendChild(section);
+}
+
 function publishingFallback(content) {
   if (!content || typeof content !== "object") return {};
   const postCopy = content.post_copy || {};
@@ -1001,11 +1443,12 @@ function updateBusyControls() {
   elements.asrStrategySelect.disabled = isBusy;
   elements.mediaFileInput.disabled = isBusy;
   elements.transcribeButton.disabled = isBusy || !mediaReady;
+  elements.experienceOptions.forEach((option) => { option.disabled = isBusy; });
   elements.analyzeButton.classList.toggle("is-loading", analysisInFlight);
   elements.transcribeButton.classList.toggle("is-loading", transcriptionInFlight);
   elements.analyzeLabel.textContent = analysisInFlight
     ? (analysisProgressLabel || (requestedAnalysisMode === "full" ? "生成中" : "解读中"))
-    : (requestedAnalysisMode === "full" ? "生成完整脚本" : "快速看懂");
+    : primaryActionLabel();
   elements.transcribeLabel.textContent = transcriptionInFlight ? "转写中" : "转写到字幕框";
   elements.resultArea.setAttribute("aria-busy", String(analysisInFlight));
 }
@@ -1055,13 +1498,22 @@ function updateMediaSelection() {
 
 function resetReportActions() {
   currentScript = "";
+  currentAcquisitionJobId = null;
+  currentPublishDraft = null;
+  currentDouyinTopicId = null;
   currentProductRelevance = null;
   currentProductRequirements = null;
   clearNode(elements.productRelevance);
   elements.productRelevance.hidden = true;
   clearNode(elements.requirementsSummary);
+  clearNode(elements.visualAnalysis);
+  clearNode(elements.fullContentLayer);
   elements.copyScriptButton.hidden = true;
   elements.copyScriptButton.textContent = "复制研究稿";
+  elements.saveDouyinTopicButton.hidden = true;
+  elements.saveDouyinTopicButton.disabled = false;
+  elements.saveDouyinTopicButton.textContent = "保存为抖音选题";
+  elements.publishExperimentButton.hidden = true;
   elements.sourceLink.hidden = true;
   elements.sourceLink.removeAttribute("href");
 }
@@ -1079,6 +1531,7 @@ function validateUrl() {
   if (!raw) {
     elements.urlInput.setAttribute("aria-invalid", "true");
     elements.urlError.textContent = "请先粘贴一个公开内容链接。";
+    showFormMessage("还没有链接：请先粘贴一个公开分享链接，再开始处理。", "error");
     elements.urlInput.focus();
     return false;
   }
@@ -1089,6 +1542,7 @@ function validateUrl() {
   } catch {
     elements.urlInput.setAttribute("aria-invalid", "true");
     elements.urlError.textContent = "链接格式不正确，请检查后重试。";
+    showFormMessage("这个链接格式不正确：请粘贴抖音或 TikTok 的公开分享链接。", "error");
     elements.urlInput.focus();
     return false;
   }
@@ -1181,6 +1635,7 @@ function showCompleted(payload, partial = false) {
   const delivery = report.delivery || payload.delivery || {};
   const recommended = report.recommended_script || report.recommended_draft || payload.recommended_script || payload.recommended_draft || {};
   const shooting = report.shooting_table || report.shooting_plan || payload.shooting_table || payload.shooting_plan || {};
+  const visualAnalysis = report.visual_analysis || payload.visual_analysis || null;
   const publishing = report.publishing_package || payload.publishing_package || {};
   const localization = report.localization || payload.localization || {};
   const evidenceRisk = report.evidence_and_risk || report.evidence_and_risks || payload.evidence_and_risk || payload.evidence_and_risks || {};
@@ -1221,6 +1676,7 @@ function showCompleted(payload, partial = false) {
   renderDeliverySummary(elements.deliverySummary, delivery, publishState);
   renderRecommendedDraft(elements.recommendedDraft, recommended, content, publishState);
   renderShootingPlan(elements.shootingPlan, shooting, content);
+  renderVisualAnalysis(elements.visualAnalysis, visualAnalysis);
 
   const contentExtras = objectWithout(content, ["script", "full_script", "script_draft", "post_copy", "caption", "cta", "call_to_action", "comment_replies"]);
   renderReportSection(elements.contentPackage, "创作说明", "推荐稿之外的定位与原创边界。", contentExtras);
@@ -1273,6 +1729,7 @@ function showCompleted(payload, partial = false) {
   renderReportSection(elements.riskReview, "风险审阅", "健康与产品相关表达需结合实际资质和平台规则复核。", isPresent(evidenceRisk) ? {} : risks);
 
   currentScript = isPresent(recommended) ? findScript(recommended, "recommended_script") : findScript(content);
+  renderFullContentLayer(elements.fullContentLayer);
   elements.copyScriptButton.hidden = !currentScript;
   elements.copyScriptButton.textContent = publishState.publishable ? "复制完整脚本" : "复制研究稿";
 
@@ -1284,6 +1741,31 @@ function showCompleted(payload, partial = false) {
     elements.sourceLink.hidden = true;
     elements.sourceLink.removeAttribute("href");
   }
+
+  const quick = report.quick_result || payload.quick_result || {};
+  const draftTitle = recommended?.title
+    || recommended?.name
+    || (Array.isArray(publishing?.titles) ? publishing.titles[0] : "")
+    || report.title
+    || quick.summary
+    || "待发布内容实验";
+  const draftHypothesis = calibration?.testable_hypothesis
+    || traffic?.performance_hypothesis
+    || quick?.original_angle
+    || "记录发布前判断，并在 72 小时后用真实指标复盘。";
+  const sourcePlatform = String(source?.platform || "").trim().toLowerCase();
+  const inferredPlatform = sourcePlatform
+    || (sourceUrl.includes("tiktok.com") ? "tiktok" : sourceUrl.includes("douyin.com") ? "douyin" : "other");
+  currentPublishDraft = {
+    title: textValue(draftTitle).trim().slice(0, 300),
+    source_url: sourceUrl || null,
+    analysis_ref: sourceUrl || null,
+    content_summary: (currentScript || textValue(quick.summary || "")).trim().slice(0, 20000) || null,
+    platform: inferredPlatform,
+    hypothesis: textValue(draftHypothesis).trim().slice(0, 5000)
+  };
+  elements.saveDouyinTopicButton.hidden = inferredPlatform !== "douyin";
+  elements.publishExperimentButton.hidden = false;
 
   renderQuickView(payload, report, source, partial);
 
@@ -1389,6 +1871,7 @@ async function acquireAndAnalyze(body) {
   if (lifecycle !== "completed") {
     throw new Error(status.message || "公开链接采集未完成。原始错误已保存在 Worker 日志中。");
   }
+  currentAcquisitionJobId = String(status.job_id || "");
 
   setAnalysisProgress("解读中");
   showFormMessage(status.cache_hit ? "已找到相同链接的完成结果，正在解读。" : "视频和字幕已取得，正在解读。", "warning");
@@ -1399,6 +1882,7 @@ async function acquireAndAnalyze(body) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         analysis_mode: body.analysis_mode,
+        analysis_strategy: body.analysis_strategy || "multi_agent",
         product_context: body.product_context || null,
         product_relevance_override: body.product_relevance_override || null
       })
@@ -1463,12 +1947,16 @@ async function submitAnalysis(event) {
   resetMissingFieldState();
   if (!validateUrl()) return;
 
+  sessionMetrics.links += 1;
+  renderSessionOverview();
+
   setLoading(true);
   showLoading();
 
   const body = {
     url: elements.urlInput.value.trim(),
     analysis_mode: requestedAnalysisMode,
+    analysis_strategy: "multi_agent",
     transcript: elements.transcriptInput.value.trim(),
     product_context: elements.productContextInput.value.trim(),
     product_relevance_override: productRelevanceOverride,
@@ -1478,7 +1966,7 @@ async function submitAnalysis(event) {
   try {
     let payload;
     if (body.transcript) {
-      setAnalysisProgress(requestedAnalysisMode === "full" ? "生成中" : "解读中");
+      setAnalysisProgress(requestedAnalysisMode === "full" ? "多 Agent 合成中" : "多 Agent 解读中");
       payload = await requestJson(
         "/api/analyze",
         {
@@ -1507,6 +1995,9 @@ async function submitAnalysis(event) {
 
     const status = String(payload.status || (payload.report ? "completed" : "partial")).toLowerCase();
     if (["completed", "complete", "success"].includes(status)) {
+      sessionMetrics.drafts += 1;
+      sessionMetrics.reviews += payload.publishable === false || payload.status === "partial" ? 1 : 0;
+      renderSessionOverview();
       showCompleted(payload);
     } else if (status === "partial") {
       if (payload.report || payload.distillation || payload.content_package || payload.recommended_script) showCompleted(payload, true);
@@ -1546,11 +2037,11 @@ async function loadDemoSample(fill = false) {
     const data = await response.json();
     const url = data?.url || data?.sample_input?.url || data?.result?.source?.url || data?.result?.report?.source?.url;
     if (!url) return;
-    demoSample = { url, label: data?.label || data?.result?.report?.title || "演示样本" };
-    elements.demoButton.textContent = "填入演示样本";
+    demoSample = { url, label: data?.label || data?.result?.report?.title || "内容示例" };
+    elements.demoButton.textContent = "使用示例";
     if (fill) fillDemoSample();
   } catch {
-    if (fill) showFormMessage("演示样本暂时不可用，请手动粘贴链接。", "error");
+    if (fill) showFormMessage("内容示例暂时不可用，请粘贴一个公开链接。", "error");
   }
 }
 
@@ -1563,7 +2054,7 @@ function fillDemoSample() {
   elements.urlInput.value = demoSample.url;
   elements.urlInput.removeAttribute("aria-invalid");
   elements.urlError.textContent = "";
-  showFormMessage(demoSample.label ? `已填入：${demoSample.label}` : "已填入演示样本。");
+  showFormMessage(demoSample.label ? `已填入：${demoSample.label}` : "已填入内容示例。");
   elements.urlInput.focus();
 }
 
@@ -1615,6 +2106,52 @@ async function copyScript() {
   }
 }
 
+function openPublishExperiment() {
+  if (!currentPublishDraft) return;
+  try {
+    sessionStorage.setItem("project024_publish_draft", JSON.stringify(currentPublishDraft));
+  } catch {
+    showCopyFeedback("浏览器未能保存预填内容，请在发布实验页手动填写");
+  }
+  window.location.assign("/static/publish.html");
+}
+
+async function saveDouyinTopic() {
+  if (!currentPublishDraft || currentPublishDraft.platform !== "douyin") return;
+  if (currentDouyinTopicId) {
+    window.location.assign("/static/douyin.html");
+    return;
+  }
+  const button = elements.saveDouyinTopicButton;
+  button.disabled = true;
+  button.textContent = "正在保存…";
+  try {
+    const response = await fetch("/api/douyin/topics", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: currentPublishDraft.title,
+        source_url: currentPublishDraft.source_url,
+        analysis_ref: currentPublishDraft.analysis_ref,
+        content_summary: currentPublishDraft.content_summary,
+        hypothesis: currentPublishDraft.hypothesis,
+        status: currentPublishDraft.content_summary ? "draft" : "idea"
+      })
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.detail || `HTTP ${response.status}`);
+    currentDouyinTopicId = payload.id;
+    currentPublishDraft.source_topic_id = payload.id;
+    button.textContent = `已保存 · ${payload.id}`;
+    button.disabled = false;
+    showCopyFeedback(payload.deduplicated ? "这条内容已在抖音选题中" : "已保存到抖音选题");
+  } catch (error) {
+    button.disabled = false;
+    button.textContent = "保存为抖音选题";
+    showCopyFeedback(`保存失败：${error.message}`);
+  }
+}
+
 function openScriptFlow() {
   if (currentScript) {
     const target = document.getElementById("stageScript");
@@ -1623,7 +2160,7 @@ function openScriptFlow() {
   }
   requestedAnalysisMode = "full";
   elements.supplementDetails.open = true;
-  elements.analyzeLabel.textContent = "生成完整脚本";
+  elements.analyzeLabel.textContent = primaryActionLabel();
   const status = currentProductRelevance?.status;
   if (status === "no_product") {
     showFormMessage("这条内容无需商品资料；核对字幕后即可生成完整脚本。");
@@ -1640,12 +2177,60 @@ function openScriptFlow() {
   elements.supplementDetails.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
+window.project024AgentBridge = {
+  getContext(mode) {
+    if (mode === "strategy") {
+      return {
+        draft: currentPublishDraft?.hypothesis || "",
+        context: {
+          source_url: String(elements.urlInput?.value || "").trim(),
+          topic_id: currentDouyinTopicId,
+          content_summary: currentPublishDraft?.content_summary || ""
+        }
+      };
+    }
+    return {
+      draft: currentScript,
+      context: {
+        source_url: String(elements.urlInput?.value || "").trim(),
+        topic_id: currentDouyinTopicId
+      }
+    };
+  },
+  applyDraft(mode, text) {
+    const value = String(text ?? "");
+    if (mode === "strategy") {
+      if (!currentPublishDraft) currentPublishDraft = {};
+      currentPublishDraft.hypothesis = value;
+      return {
+        persisted: false,
+        message: "已写回当前分析页的实验假设；提交发布实验后才会保存。"
+      };
+    }
+    if (mode !== "script") return;
+    currentScript = value;
+    if (!currentPublishDraft) currentPublishDraft = {};
+    currentPublishDraft.content_summary = value;
+    renderFullContentLayer(elements.fullContentLayer);
+    elements.copyScriptButton.hidden = !value;
+    return {
+      persisted: false,
+      message: "已写回当前分析页的完整原创稿；尚未自动发布。"
+    };
+  }
+};
+
 /* ---------- 事件绑定 ---------- */
 elements.form.addEventListener("submit", submitAnalysis);
+elements.experienceOptions.forEach((option) => {
+  option.addEventListener("click", () => setExperienceMode(option.dataset.experienceMode));
+});
 elements.demoButton.addEventListener("click", () => loadDemoSample(true));
 elements.mediaFileInput.addEventListener("change", updateMediaSelection);
 elements.transcribeButton.addEventListener("click", transcribeSelectedMedia);
 elements.copyScriptButton.addEventListener("click", copyScript);
+elements.publishExperimentButton.addEventListener("click", openPublishExperiment);
+elements.saveDouyinTopicButton.addEventListener("click", saveDouyinTopic);
 elements.scriptNextButton.addEventListener("click", openScriptFlow);
 elements.pathway.querySelectorAll(".gate").forEach((gate) => {
   gate.addEventListener("click", () => navigateToGate(gate));
@@ -1662,6 +2247,8 @@ elements.transcriptInput.addEventListener("input", resetMissingFieldState);
 elements.productContextInput.addEventListener("input", resetMissingFieldState);
 
 resetPathway();
+setExperienceMode(readExperienceMode(), false);
+renderSessionOverview();
 loadDemoSample();
 loadPlatforms();
 loadRuntimeMode();

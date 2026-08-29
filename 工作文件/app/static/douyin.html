@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="集中管理由项目024分析结果生成的抖音选题，并带入发布实验。">
+    <title>抖音运营 · 自媒体通关搭档</title>
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="/static/styles.css?v=20260829-2">
+  </head>
+  <body class="douyin-page">
+    <a class="skip-link" href="#douyinMain">跳到主要内容</a>
+    <header class="topbar">
+      <div class="topbar__inner">
+        <a class="brand" href="/">
+          <span class="brand__mark" aria-hidden="true">通</span>
+          <span class="brand__name">自媒体通关搭档</span>
+          <span class="brand__edition">内容工作台</span>
+        </a>
+        <nav class="topbar__nav" aria-label="主要导航">
+          <a class="topbar__link" href="/">内容分析</a>
+          <a class="topbar__link topbar__link--active" href="/static/douyin.html" aria-current="page">抖音运营</a>
+          <a class="topbar__link" href="/static/publish.html">发布校准</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="container douyin-shell" id="douyinMain">
+      <section class="douyin-intro" aria-labelledby="douyinTitle">
+        <div>
+          <p class="eyebrow">抖音板块 · 内容运营</p>
+          <h1 id="douyinTitle">把分析结果接进长期运营</h1>
+          <p>这里只管理抖音选题和发布前动作。内容证据与脚本仍由项目024分析页生成，发布后的真实数据进入发布校准。</p>
+        </div>
+        <div class="douyin-intro__actions">
+          <button class="button button--secondary" id="openAccountDialog" type="button">连接账号数据</button>
+          <a class="button button--primary" href="/">分析一个抖音链接</a>
+        </div>
+      </section>
+
+      <section class="douyin-stats" aria-label="抖音选题概览">
+        <div><span>全部选题</span><strong id="statAll">0</strong></div>
+        <div><span>待整理</span><strong id="statIdea">0</strong></div>
+        <div><span>脚本草稿</span><strong id="statDraft">0</strong></div>
+        <div><span>可进实验</span><strong id="statReady">0</strong></div>
+      </section>
+
+      <section class="douyin-account" aria-labelledby="accountTitle">
+        <div class="douyin-account__heading">
+          <div>
+            <p class="publish-kicker">账号自身数据 · 不套行业均值</p>
+            <h2 id="accountTitle">账号诊断</h2>
+          </div>
+          <div class="douyin-account__controls">
+            <label class="visually-hidden" for="accountSelect">选择抖音账号</label>
+            <select id="accountSelect" aria-label="选择抖音账号">
+              <option value="">尚未连接账号</option>
+            </select>
+            <button class="button button--secondary" id="updateAccountData" type="button">同步数据</button>
+          </div>
+        </div>
+        <p class="douyin-message" id="accountMessage" role="status" aria-live="polite"></p>
+        <div id="accountOverview" aria-live="polite">
+          <div class="douyin-account__empty">
+            <h3>连接账号，持续获得改进重点</h3>
+            <p>系统会优先自动取得账号数据，并只用你自己的前后表现给出下一步建议。</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="douyin-worklist" aria-labelledby="topicListTitle">
+        <div class="douyin-worklist__heading">
+          <div>
+            <p class="publish-kicker">同一内容编号 · 贯穿发布实验</p>
+            <h2 id="topicListTitle">抖音选题</h2>
+          </div>
+          <div class="douyin-filters">
+            <label class="visually-hidden" for="topicSearch">搜索选题</label>
+            <input id="topicSearch" type="search" placeholder="搜索标题或内容编号" autocomplete="off">
+            <label class="visually-hidden" for="statusFilter">筛选状态</label>
+            <select id="statusFilter">
+              <option value="all">全部状态</option>
+              <option value="idea">待整理</option>
+              <option value="draft">脚本草稿</option>
+              <option value="ready">可进实验</option>
+            </select>
+            <button class="button button--secondary" id="reloadTopics" type="button">刷新</button>
+          </div>
+        </div>
+        <p class="douyin-message" id="douyinMessage" role="status" aria-live="polite"></p>
+        <div id="topicList" aria-live="polite">
+          <p class="publish-empty">正在读取抖音选题…</p>
+        </div>
+      </section>
+    </main>
+
+    <dialog class="account-dialog" id="accountDialog" aria-labelledby="accountDialogTitle">
+      <div class="account-dialog__header">
+        <div>
+          <p class="publish-kicker">抖音账号与数据</p>
+          <h2 id="accountDialogTitle">连接抖音账号</h2>
+        </div>
+        <button class="account-dialog__close" id="closeAccountDialog" type="button" aria-label="关闭" title="关闭">×</button>
+      </div>
+      <form id="accountForm" novalidate>
+        <div class="publish-form-grid publish-form-grid--two">
+          <div class="publish-field">
+            <label for="accountDisplayName">账号名称 *</label>
+            <input id="accountDisplayName" maxlength="200" required autocomplete="off" placeholder="创作者昵称">
+          </div>
+          <div class="publish-field">
+            <label for="accountDouyinId">抖音号</label>
+            <input id="accountDouyinId" maxlength="200" autocomplete="off" placeholder="可稍后补充">
+          </div>
+        </div>
+        <section class="account-auto-connect" aria-labelledby="autoConnectTitle">
+          <div class="account-auto-connect__heading">
+            <div>
+              <span class="account-auto-connect__tag">推荐</span>
+              <h3 id="autoConnectTitle">自动连接并同步</h3>
+            </div>
+            <span>无需整理表格</span>
+          </div>
+          <div class="publish-form-grid publish-form-grid--two">
+            <select id="browserChoice" aria-label="选择本机浏览器">
+              <option value="">自动选择可用浏览器</option>
+            </select>
+            <button class="button button--primary" id="browserImport" type="button" disabled>自动连接账号</button>
+          </div>
+          <p class="field-help">系统会打开登录窗口；完成扫码后自动寻找账号数据并同步。当前研发环境使用本机连接器，线上版本将切换为官方授权或安全连接器。</p>
+        </section>
+        <div class="account-connection-status" id="officialConnectionStatus">
+          <strong>官方连接</strong>
+          <span>官方授权接入需要主体、应用、权限和回调通过平台审核；完成前不会显示为已连接。</span>
+        </div>
+        <details class="account-fallback">
+          <summary>自动连接失败时，使用文件导入</summary>
+          <div class="publish-field">
+            <label for="creatorDataFile">创作者中心数据文件</label>
+            <input id="creatorDataFile" type="file" accept=".csv,.xlsx,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+            <p class="field-help">支持作品或粉丝数据 CSV / XLSX；相同文件不会重复计数，只保存标准化指标和文件摘要。</p>
+          </div>
+        </details>
+        <div class="publish-field">
+          <label for="accountStrategy">当前运营策略</label>
+          <textarea id="accountStrategy" rows="4" maxlength="20000" placeholder="记录账号定位、内容支柱和下一轮实验"></textarea>
+        </div>
+        <div class="publish-submit-row">
+          <button class="button button--secondary" id="saveAccount" type="submit">保存账号设置</button>
+          <p class="publish-message" id="accountFormMessage" role="status" aria-live="polite"></p>
+        </div>
+      </form>
+    </dialog>
+
+    <script src="/static/douyin.js?v=20260829-2" defer></script>
+    <script src="/static/agent-panel.js?v=20260829-2" defer></script>
+  </body>
+</html>

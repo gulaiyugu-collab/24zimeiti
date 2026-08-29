@@ -1,8 +1,8 @@
-# 自媒体通关搭档 Web 开发版 v0.3.0
+# 自媒体通关搭档 Web 应用
 
-这是项目024当前持续完善的 Web 应用开发版。默认路径是“快速看懂”：用户提交抖音或 TikTok 公开内容链接，先得到一句话结论、内容结构和可借鉴方法；需要时再展开完整脚本、拍摄表、发布内容包以及证据与风险边界。
+这是项目024线上产品的当前本地研发与验真环境。用户选择“创作陪跑”或“安心交付”，提交抖音或 TikTok 公开内容链接后，先得到一句话结论、内容结构和可借鉴方法；需要时再展开完整脚本、拍摄表、发布内容包以及证据与风险边界。
 
-本目录不是正式甲方交付包。现有 `产出` 目录中的旧甲方包未随 v0.3 覆盖；演示请使用本 README 下方的独立入口。
+最终目标是部署到服务器后通过浏览器持续使用，不以本机安装包或甲方验收版定义产品。线上架构、账号隔离、用量计量、自动账号连接和生产部署按项目根目录 `feature_list.json` 的 P4 阶段推进。
 
 ## 当前能力
 
@@ -19,7 +19,12 @@
 - Web 表单可选择媒体并调用转写接口；成功结果写入字幕框，由用户核对后再显式开始分析。
 - 已实现 DeepSeek 结构化内容生成适配器；仅在服务端配置凭据后才会尝试调用。
 - `POST /api/acquisition/jobs` 会把来源检查放入独立 Python 子进程，任务状态、原始证据和精简清单写入磁盘；主请求只返回任务摘要。
-- `POST /api/acquisition/jobs/{job_id}/analyze` 只接受完成态且可分析的清单，自动使用 Worker 字幕和数字证据，并在响应中保留任务 ID、清单地址和字幕 SHA-256。
+- `POST /api/acquisition/jobs/{job_id}/analyze` 只接受完成态且可分析的清单，自动使用 Worker 字幕和数字证据；任务 ID、清单地址、字幕 SHA-256 与模型调用信息只进入接口 `diagnostics`，不进入甲方报告或页面。
+- 已登记来源视频会在分析时执行本机代表帧提取、候选镜头结构估算、RapidOCR 画面文字识别和 Ollama 精选帧语义分析：最多覆盖前 1200 秒、提取 12 帧、选择 4 帧做画面语义，输入上限 512 MiB，总截止时间 180 秒。OCR 运行在 G 盘独立 `.venv-ocr`，视觉模型位于项目 `.cache/ollama-vision`；两者都不需要账号、API Key 或付费。
+- 发布校准页 `/static/publish.html` 使用严格 `predicted → published → measured → reviewed` 状态机和 SQLite 追加事件历史；7 维自评与 T+72h 指标区间是可选复盘基线，无基线也可回填真实指标并完成复盘。
+- 抖音运营页 `/static/douyin.html` 接收分析结果生成的稳定内容编号，使用 SQLite 保存选题，可更新状态并把同一编号带入发布实验；完全相同的分析快照不会重复创建。
+- 抖音运营页以自动连接账号数据为主路径；当前本机浏览器助手是研发实现，线上需演进为官方 OAuth 或用户侧安全连接器。CSV/XLSX 仅作为连接失败时的兜底。系统只保存标准化指标与文件摘要，账号诊断只比较自身前后时段。
+- 三个主页面共用 Agent 小窗；每次用户主动发送只调用一次已配置内容模型，脚本或策略可写回当前页面/SQLite。未配置时如实禁用，不静默换 Provider。
 - 已完成的真实或登记样本任务按规范化链接和请求参数复用缓存；`needs_input` 和 `failed` 不进入完成缓存，原始证据不会默认进入分析上下文。
 - YouTube、Facebook 和 X 仍为 `planned`。
 
@@ -32,10 +37,11 @@
 - Web 表单默认自动触发“采集 → 字幕 → 分析”；25 MB 手动媒体上传和字幕框仅用于自动采集失败后的受控降级。
 - 外部 ASR 当前采用通用的 OpenAI-compatible `/audio/transcriptions` 协议。阿里云百炼、AssemblyAI 等厂商专用协议尚未接入和实测。
 - 本机演示环境已在项目 G 盘安装 `faster-whisper`、`large-v3-turbo` 模型和 Windows CUDA 12 运行库；真实 Worker 已在 RTX 4060 Ti 上验真。其他机器仍需按 `requirements.txt` 安装依赖并单独验证 GPU。
-- DeepSeek 只负责根据已有文字和商品资料生成结构化研究稿，不负责语音转写、平台采集或事实核验。
-- 隔离 Worker 已接入抖音与 TikTok 实时单链接媒体和字幕；主页作品列表、画面 OCR、镜头结构和评论采集尚未接入。
+- DeepSeek 只负责根据已有文字、商品资料与白名单收敛后的画面证据生成研究稿，不负责语音转写、平台采集、OCR 或事实核验，也不得从帧数/切点数推断画面语义。
+- 抖音与 TikTok 实时单链接媒体和字幕、代表帧、候选镜头结构、本地画面文字 OCR 和本地多模态精选帧分析已接入；主页作品列表和评论采集尚未接入。多模态结果只覆盖精选帧，复杂分屏、细小物体与画面文字可能误判。
 - DeepSeek `deepseek-chat` 已在本机服务端配置下完成真实研究稿验收；仓库不包含凭据，其他电脑必须自行配置并重新验真。百炼及其他付费服务仍未接入或验真。
-- 应用不读取 Cookie、密码、浏览器本地存储或个人登录态，不自动发布内容。
+- 应用不把 Cookie、密码、浏览器本地存储或个人登录态写入项目、日志、数据库或云端；浏览器导出助手仅在用户主动点击时使用本机会话，不自动发布内容。
+- 官方抖音 OAuth 尚未实施；官方入驻文档当前将网站/移动应用列在企业身份范围，个人主体仅支持小游戏和小玩法。即使具备合规主体，也必须在开放平台应用、HTTPS 回调、scope、真实授权、token 刷新和至少一个数据接口均验真后，才可标记“已连接”。
 
 ## 结果与发布前审核
 
@@ -78,10 +84,11 @@ Set-Location 'G:\Workspace\Projects\项目024_自媒体通关搭档\工作文件
 - 产品页：<http://127.0.0.1:8787/>
 - API 文档：<http://127.0.0.1:8787/docs>
 - 健康检查：<http://127.0.0.1:8787/api/health>
+- 抖音运营：<http://127.0.0.1:8787/static/douyin.html>
 
-甲方电脑演示入口：
+本地兼容入口：
 
-- 可直接双击项目根目录的 `项目024_v0.3_甲方演示.cmd`。
+- 旧文件名 `项目024_v0.3_甲方演示.cmd` 暂时保留用于兼容现有快捷方式，不代表当前产品定位，待 P2-02 归档时统一收敛。
 - 或在 PowerShell 中运行：
 
 ```powershell
@@ -89,7 +96,7 @@ Set-Location 'G:\Workspace\Projects\项目024_自媒体通关搭档\工作文件
 .\run_v03_demo.ps1
 ```
 
-服务默认仅监听 `127.0.0.1:8792`，电脑打开 <http://127.0.0.1:8792/>。重复运行入口会复用已通过健康检查的同一服务，不会启动第二个实例。按用户最新决定，电脑演示默认启用付费内容 Provider；页面会直接请求完整内容生成。需要临时关闭付费调用时，显式运行 `.\run_v03_demo.ps1 -DisablePaidContent`。手机端局域网验收暂缓。数字依据默认折叠，发布前审核未通过时不会显示为已通关。
+服务仅允许 `127.0.0.1`、`localhost` 或 `::1` 回环监听，电脑打开 <http://127.0.0.1:8792/>。账号数据和付费 Agent 尚未实现局域网访问控制，因此 `run.ps1` 会拒绝 `0.0.0.0` 或其他非回环地址；手机入口恢复前必须先补访问控制和真实设备验收。重复运行入口会复用已通过健康检查的同一服务，不会启动第二个实例。按用户最新决定，电脑演示默认启用付费内容 Provider；页面会直接请求完整内容生成。需要临时关闭付费调用时，显式运行 `.\run_v03_demo.ps1 -DisablePaidContent`。数字依据默认折叠，发布前审核未通过时不会显示为已通关。
 
 ## API
 
@@ -104,6 +111,15 @@ Set-Location 'G:\Workspace\Projects\项目024_自媒体通关搭档\工作文件
 ### `GET /api/demo`
 
 返回默认抖音登记样本和对应 v0.3 快速结果及兼容完整报告。
+
+### 抖音选题 API
+
+- `POST /api/douyin/topics`：把抖音分析结果保存为选题，仅接受 `douyin.com` 来源。
+- `GET /api/douyin/topics`：列出抖音选题，可用 `status=idea|draft|ready` 筛选。
+- `GET /api/douyin/topics/{topic_id}`：读取单条选题。
+- `PATCH /api/douyin/topics/{topic_id}`：更新选题状态。
+
+选题内容保存在 `var/douyin_operations/douyin_operations.sqlite3`。浏览器页面不接收或展示采集任务号、模型诊断和本机路径。
 
 ### `POST /api/acquisition/jobs`
 
@@ -122,6 +138,8 @@ Set-Location 'G:\Workspace\Projects\项目024_自媒体通关搭档\工作文件
 - `GET /api/acquisition/jobs/{job_id}`：只读取任务状态、进度、缺失项和精简清单地址。
 - `GET /api/acquisition/jobs/{job_id}/manifest`：读取默认交给分析 Agent 的精简证据包。
 - `GET /api/acquisition/jobs/{job_id}/artifacts/{artifact_name}`：只有核对具体证据时才定向读取白名单原始文件。
+- `POST /api/acquisition/jobs/{job_id}/visual-analysis`：对清单中已登记且重新校验 SHA-256 的来源视频执行本机代表帧与候选镜头结构分析。
+- `GET /api/acquisition/jobs/{job_id}/visual-analysis/artifacts/{artifact_name}`：按派生产物白名单读取代表帧或结构报告。
 - `POST /api/acquisition/jobs/{job_id}/analyze`：完成态清单自动进入内容分析，请求体不接受 `transcript`。
 
 任务状态为 `queued`、`processing`、`completed`、`needs_input` 或 `failed`。只有 `completed` 会写入缓存；`needs_input` 不会伪装成已采集内容。
@@ -208,6 +226,7 @@ curl.exe -X POST 'http://127.0.0.1:8787/api/transcribe?provider=auto' `
 - `PROJECT024_ACQUISITION_ROOT`：任务、缓存和证据根目录；本地默认使用 `工作文件/app/var/acquisition`。
 - `PROJECT024_DOUYIN_PUBLIC_API_BASE`：可替换的抖音社区公共 Provider 基础地址；未设置时使用 `https://douyin.wtf`。
 - 每个任务包含 `request.json`、`status.json`、`evidence_manifest.json`、`raw/` 和独立 Worker 日志。
+- 完成画面分析后，派生的代表帧和结构报告位于任务 `visual_analysis/`；缓存复用前会复核来源配置和帧文件哈希。
 - `evidence_manifest.json` 限制默认字段数量和文字长度；完整来源只保存在 `raw/`，通过白名单文件名按需读取。抖音元数据只保留公开字段，作品地址规范化为无查询参数的标准 URL，不保存 Provider 完整响应、媒体签名地址、Cookie 或请求头。
 - 当前是单机子进程 Worker MVP。正式多实例部署仍需外部队列、并发限制、超时终止、任务保留期和清理策略。
 
@@ -231,6 +250,15 @@ curl.exe -X POST 'http://127.0.0.1:8787/api/transcribe?provider=auto' `
 - `PROJECT024_LOCAL_ASR_DOWNLOAD_ROOT`：模型下载与缓存目录；未设置时使用项目内 `.cache/faster-whisper`。
 
 自动采集 Worker 固定使用本地 ASR，不调用付费 ASR。服务启动时只把项目虚拟环境内的 NVIDIA DLL 目录加入当前进程，不永久修改系统 PATH。
+
+### 本地画面语义
+
+- 本机使用 Ollama `qwen2.5vl:3b`，默认服务地址 `http://127.0.0.1:11435`，模型目录为 `.cache/ollama-vision`。
+- `run_v03_demo.ps1` 只会自动启动已安装的项目专用 Ollama；不会修改系统代理，也不会在模型缺失时静默改用云端或付费 Provider。
+- `PROJECT024_VISION_ENABLED`：设为 `0` 可显式停用；默认启用。
+- `PROJECT024_VISION_BASE_URL`：必须是 loopback HTTP 地址；默认 `http://127.0.0.1:11435`。
+- `PROJECT024_VISION_MODEL`：默认 `qwen2.5vl:3b`。
+- 每次最多均匀选择 4 张代表帧；固定结构输出、OCR 文字回声、否定项、重复项和推断项分别校验。复杂分屏仍可能误判，必须通过时间线中的“查看对应帧”人工复核。
 
 ### DeepSeek 内容生成
 
@@ -256,6 +284,7 @@ JavaScript 语法检查：
 
 ```powershell
 node --check .\static\app.js
+node --check .\static\publish.js
 ```
 
 服务器启动后可运行自动采集浏览器验真：
@@ -264,7 +293,21 @@ node --check .\static\app.js
 node .\tests\browser_p1_auto_acquisition.cjs http://127.0.0.1:8787
 ```
 
-`browser_p1_auto_acquisition.cjs` 用于显式 `-DisablePaidContent` 后的零付费回归；第五个参数可传入抖音公开链接。默认付费模式使用 `browser_paid_full_acquisition.cjs`，真实检查页面请求 `analysis_mode=full`、DeepSeek 调用、完整稿、拍摄表、发布内容包与发布前审核。两类脚本都会检查控制台、请求、响应和页面布局。
+当前零付费 Python 全量回归为 99/99。当前页面脚本包括 `browser_v03.cjs`（主页）、`browser_publish_v03.cjs`（发布校准）和 `browser_visual_analysis.cjs`（真实代表帧）；它们分别完成 26/26、30/30、13/13 验收。`browser_p1_auto_acquisition.cjs` 保留为旧阶段零付费采集回归；`browser_paid_full_acquisition.cjs` 会产生真实 DeepSeek 调用，只有明确允许费用时运行。
+
+## 云端 Worker 实验入口
+
+`app.services.cloud_worker_runner` 是独立的出站 Worker 客户端：它从云端控制面领取任务，在本机复用现有采集/ASR 内核，并回传精简结果。Worker 不监听公网端口，也不会读取或上传 Cookie、浏览器 profile 或本地密钥。
+
+```powershell
+$env:PROJECT024_CLOUD_CONTROL_BASE_URL = 'https://your-control-plane.example'
+$env:PROJECT024_CLOUD_WORKER_ID = 'worker-01'
+$env:PROJECT024_CLOUD_WORKER_TOKEN = '<只在本机环境设置>'
+$env:PROJECT024_ACQUISITION_ROOT = 'G:\Project024Data\acquisition'
+.\.venv\Scripts\python.exe -m app.services.cloud_worker_runner
+```
+
+当前控制面合约仍使用测试用 `X-Worker-Id` 标头；正式部署必须替换为托管身份验证/JWT，并完成账号隔离、访问控制、任务保留与费用计量后再开放手机入口。上述命令只用于已授权的控制面，不代表本地服务已经上线。
 
 ## Docker
 

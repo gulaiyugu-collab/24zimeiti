@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="粘贴一个视频链接，自动完成内容理解、原创稿、拍摄建议和发布前检查。">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%2318201d'/%3E%3Ctext x='32' y='43' text-anchor='middle' font-size='36' font-family='sans-serif' font-weight='700' fill='white'%3E%E9%80%9A%3C/text%3E%3C/svg%3E">
+    <title>内容工作台 · 自媒体通关搭档</title>
+    <script>
+      (function () {
+        const isFile = location.protocol === 'file:';
+        const css = document.createElement('link');
+        css.rel = 'stylesheet';
+        css.href = isFile ? './styles.css?v=20260828-2' : '/static/styles.css?v=20260828-2';
+        document.currentScript.parentNode.insertBefore(css, document.currentScript.nextSibling);
+        const js = document.createElement('script');
+        js.src = isFile ? './app.js?v=20260828-2' : '/static/app.js?v=20260828-2';
+        js.defer = true;
+        document.currentScript.parentNode.insertBefore(js, document.currentScript.nextSibling);
+        const agent = document.createElement('script');
+        agent.src = isFile ? './agent-panel.js?v=20260828-3' : '/static/agent-panel.js?v=20260828-3';
+        agent.defer = true;
+        document.currentScript.parentNode.insertBefore(agent, js.nextSibling);
+      })();
+    </script>
+  </head>
+  <body>
+    <a class="skip-link" href="#mainContent">跳到主要内容</a>
+
+    <header class="topbar">
+      <div class="container topbar__inner">
+        <a class="brand" href="/" aria-label="自媒体通关搭档首页">
+          <span class="brand__mark" aria-hidden="true">通</span>
+          <span class="brand__name">自媒体通关搭档</span>
+          <span class="brand__edition">内容工作台</span>
+        </a>
+        <div class="platform-status" id="platformStatus" aria-live="polite">
+          <span class="status-dot" aria-hidden="true"></span>
+          <span id="platformStatusText">当前支持：抖音、TikTok</span>
+        </div>
+        <nav class="topbar__nav" aria-label="主要导航">
+          <a class="topbar__link topbar__link--active" href="/" aria-current="page">内容工作台</a>
+          <a class="topbar__link" href="/static/douyin.html">抖音运营</a>
+          <a class="topbar__link" href="/static/publish.html">发布校准</a>
+        </nav>
+      </div>
+    </header>
+
+    <main id="mainContent">
+      <section class="input-band" aria-labelledby="workspaceTitle">
+        <div class="container">
+          <div class="experience-switch" aria-labelledby="experienceModeLabel">
+            <span class="experience-switch__label" id="experienceModeLabel">使用方式</span>
+            <div class="experience-switch__options" role="radiogroup" aria-label="选择使用方式">
+              <button class="experience-option" type="button" role="radio" aria-checked="false" data-experience-mode="companion">
+                <span>创作陪跑</span>
+                <small>一起打磨这条内容</small>
+              </button>
+              <button class="experience-option" type="button" role="radio" aria-checked="true" data-experience-mode="guided">
+                <span>安心交付</span>
+                <small>系统按步骤处理</small>
+              </button>
+            </div>
+          </div>
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow" id="workspaceEyebrow">安心交付 · 系统按步骤处理</p>
+              <h1 id="workspaceTitle">粘贴视频链接，按步骤完成内容</h1>
+            </div>
+            <p class="section-heading__note" id="workspaceNote">不用整理字幕或研究技术设置；先贴链接，系统会告诉你下一步。</p>
+          </div>
+
+          <form id="analysisForm" novalidate>
+            <div class="primary-field">
+              <label for="urlInput">公开视频链接</label>
+              <div class="url-row">
+                <input
+                  id="urlInput"
+                  name="url"
+                  type="url"
+                  inputmode="url"
+                  autocomplete="url"
+                  placeholder="粘贴公开分享链接"
+                  aria-describedby="urlHint urlError"
+                  required
+                >
+                <button class="button button--primary" id="analyzeButton" type="submit">
+                  <span class="button__label">开始处理</span>
+                  <span class="button__loader" aria-hidden="true"></span>
+                </button>
+              </div>
+              <div class="field-meta">
+                <span id="urlHint">支持抖音与 TikTok 公开分享链接</span>
+                <button class="text-button" id="demoButton" type="button">使用示例</button>
+              </div>
+              <p class="field-error" id="urlError" role="alert"></p>
+            </div>
+
+            <details class="supplement" id="supplementDetails">
+              <summary>
+                <span>需要时再补充资料</span>
+                <span class="summary-note" id="supplementNote">只有系统提示时才需要补充</span>
+              </summary>
+              <div class="supplement__grid">
+                <div class="field">
+                  <label for="transcriptInput">字幕或口播稿</label>
+                  <textarea
+                    id="transcriptInput"
+                    name="transcript"
+                    rows="6"
+                    placeholder="平台无法读取字幕时，可在这里粘贴"
+                  ></textarea>
+                </div>
+                <div class="field field--span-2 media-field">
+                  <div class="field-label-row">
+                    <label for="mediaFileInput">音视频转写</label>
+                    <span class="availability-label availability-label--active">最大 25 MB</span>
+                  </div>
+                  <div class="media-upload-row">
+                    <input
+                      id="mediaFileInput"
+                      name="media"
+                      type="file"
+                      accept="audio/*,video/mp4,video/quicktime,video/webm,.aac,.flac,.m4a,.mp3,.mp4,.mpeg,.mpga,.mov,.ogg,.wav,.webm"
+                      aria-describedby="mediaFileHint mediaFileMeta transcriptionStatus"
+                    >
+                    <button class="button button--secondary" id="transcribeButton" type="button" disabled>
+                      <span class="button__label">转写到字幕框</span>
+                      <span class="button__loader" aria-hidden="true"></span>
+                    </button>
+                  </div>
+                  <p class="field-hint" id="mediaFileHint">文件只用于本次转写，服务端不保留；完成后仍需人工核对原媒体。</p>
+                  <p class="media-file-meta" id="mediaFileMeta">尚未选择文件</p>
+                  <div class="transcription-status" id="transcriptionStatus" role="status" aria-live="polite" hidden></div>
+                </div>
+                <div class="field" id="productContextField">
+                  <label for="productContextInput">已确认的商品事实</label>
+                  <textarea
+                    id="productContextInput"
+                    name="product_context"
+                    rows="6"
+                    placeholder="例如：商品名称、型号、随盒附件、真实卖点、禁用说法"
+                  ></textarea>
+                  <p class="field-hint">未提供或无法核验的卖点会保留为待确认项。</p>
+                </div>
+                <div class="field field--compact">
+                  <label for="asrStrategySelect">语音转写方式</label>
+                  <select id="asrStrategySelect" name="asr_strategy" aria-describedby="asrStrategyHint">
+                    <option value="auto">自动选择（默认）</option>
+                    <option value="external">外部 API 优先</option>
+                    <option value="local">本地优先</option>
+                  </select>
+                  <p class="field-hint" id="asrStrategyHint">自动模式优先外部 API，本地能力作为回退，并展示实际执行状态。</p>
+                </div>
+                <div class="field field--compact field--reserved">
+                  <div class="field-label-row">
+                    <label for="targetMarketSelect">目标地区 / 国家</label>
+                    <span class="availability-label">本版本未启用</span>
+                  </div>
+                  <select id="targetMarketSelect" name="target_market" disabled aria-describedby="targetMarketHint">
+                    <option value="">后续版本可选择</option>
+                  </select>
+                  <p class="field-hint" id="targetMarketHint">v0.2 仅保留入口，不执行地区本地化。</p>
+                </div>
+              </div>
+            </details>
+
+            <div class="form-message" id="formMessage" role="status" aria-live="polite" hidden></div>
+          </form>
+        </div>
+      </section>
+
+      <section class="result-area" id="resultArea" aria-live="polite" aria-busy="false" hidden>
+        <div class="container">
+          <div id="statePanel"></div>
+
+          <div class="report" id="reportLayout" hidden>
+            <!-- 关卡 1：快速看懂（入口理解） -->
+            <section class="gate-view" id="gateQuick" aria-labelledby="gateQuickTitle">
+              <div class="gate-view__heading">
+                <div>
+                  <p class="eyebrow">关卡 1 · 读懂链接</p>
+                  <h2 id="gateQuickTitle">这条内容的重点</h2>
+                </div>
+                <span class="gate-view__source" id="quickSourceMeta">来源信息读取中</span>
+              </div>
+              <p class="gate-view__summary" id="quickSummary"></p>
+              <div class="gate-view__grid">
+                <section class="gate-view__section">
+                  <h3>它是怎么讲的</h3>
+                  <ol id="quickWhatHappens"></ol>
+                </section>
+                <section class="gate-view__section">
+                  <h3>为什么容易被看懂</h3>
+                  <ul id="quickWhyItWorks"></ul>
+                </section>
+                <section class="gate-view__section gate-view__section--wide">
+                  <h3>可以借鉴的做法</h3>
+                  <ul id="quickTransferable"></ul>
+                  <p class="gate-view__angle" id="quickOriginalAngle"></p>
+                </section>
+              </div>
+              <div class="gate-view__actions">
+                <button class="button button--primary" id="scriptNextButton" type="button">生成我的原创稿</button>
+              </div>
+            </section>
+
+            <section class="product-relevance" id="productRelevance" aria-labelledby="productRelevanceTitle" hidden></section>
+
+            <!-- 通关路径导航（签名交互） -->
+            <nav class="pathway" id="pathway" aria-label="内容通关路径">
+              <ol class="pathway__gates">
+                <li>
+                  <button class="gate" type="button" data-gate="1" data-target="gateQuick" aria-describedby="pathwaySummary">
+                    <span class="gate__node" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" class="gate__icon"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
+                      <span class="gate__check">✓</span>
+                    </span>
+                    <span class="gate__meta">
+                      <span class="gate__index">关卡 1</span>
+                      <span class="gate__label">读懂链接</span>
+                      <span class="gate__state">未解锁</span>
+                    </span>
+                  </button>
+                </li>
+                <li>
+                  <button class="gate" type="button" data-gate="2" data-target="stageScript" aria-describedby="pathwaySummary">
+                    <span class="gate__node" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" class="gate__icon"><path d="M7 3h7l5 5v13H7z"/><line x1="10.5" y1="12.5" x2="16" y2="12.5"/><line x1="10.5" y1="16" x2="16" y2="16"/></svg>
+                      <span class="gate__check">✓</span>
+                    </span>
+                    <span class="gate__meta">
+                      <span class="gate__index">关卡 2</span>
+                      <span class="gate__label">拆出原创稿</span>
+                      <span class="gate__state">未解锁</span>
+                    </span>
+                  </button>
+                </li>
+                <li>
+                  <button class="gate" type="button" data-gate="3" data-target="stageShooting" aria-describedby="pathwaySummary">
+                    <span class="gate__node" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" class="gate__icon"><rect x="3" y="7.5" width="18" height="13" rx="2"/><circle cx="12" cy="14" r="3.4"/><path d="M8.5 7.5 10 5h4l1.5 2.5"/></svg>
+                      <span class="gate__check">✓</span>
+                    </span>
+                    <span class="gate__meta">
+                      <span class="gate__index">关卡 3</span>
+                      <span class="gate__label">拍出来</span>
+                      <span class="gate__state">未解锁</span>
+                    </span>
+                  </button>
+                </li>
+                <li>
+                  <button class="gate" type="button" data-gate="4" data-target="stagePublish" aria-describedby="pathwaySummary">
+                    <span class="gate__node" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" class="gate__icon"><path d="M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6z"/><path d="M9 12l2 2 4-4"/></svg>
+                      <span class="gate__check">✓</span>
+                    </span>
+                    <span class="gate__meta">
+                      <span class="gate__index">关卡 4</span>
+                      <span class="gate__label">把关发布</span>
+                      <span class="gate__state">未解锁</span>
+                    </span>
+                  </button>
+                </li>
+              </ol>
+              <div class="pathway__track" aria-hidden="true">
+                <span class="pathway__fill" id="pathwayFill"></span>
+              </div>
+              <p class="pathway__summary" id="pathwaySummary" aria-live="polite">通关进度 0 / 4</p>
+            </nav>
+
+            <!-- 关卡 2：唯一推荐成稿 -->
+            <section class="stage" id="stageScript" data-gate="2" aria-labelledby="stageScriptTitle">
+              <div class="stage__heading">
+                <span class="stage__index" aria-hidden="true">02</span>
+                <div>
+                  <h2 id="stageScriptTitle">拆出原创稿</h2>
+                  <p>默认交付唯一推荐稿；其余内容用于验证与执行补充。</p>
+                </div>
+                <span class="stage__status" id="stageScriptStatus"></span>
+              </div>
+              <div id="deliverySummary"></div>
+              <div id="recommendedDraft"></div>
+              <div id="fullContentLayer"></div>
+              <div id="contentPackage"></div>
+            </section>
+
+            <!-- 关卡 3：拍摄执行表 -->
+            <section class="stage" id="stageShooting" data-gate="3" aria-labelledby="stageShootingTitle">
+              <div class="stage__heading">
+                <span class="stage__index" aria-hidden="true">03</span>
+                <div>
+                  <h2 id="stageShootingTitle">拍出来</h2>
+                  <p>按时间、画面、口播与屏幕文字直接进入拍摄。</p>
+                </div>
+                <span class="stage__status" id="stageShootingStatus"></span>
+              </div>
+              <div id="shootingPlan"></div>
+              <div id="visualAnalysis"></div>
+            </section>
+
+            <!-- 关卡 4：把关发布 -->
+            <section class="stage stage--gate" id="stagePublish" data-gate="4" aria-labelledby="stagePublishTitle">
+              <div class="stage__heading">
+                <span class="stage__index" aria-hidden="true">04</span>
+                <div>
+                  <h2 id="stagePublishTitle">把关发布</h2>
+                  <p>发布内容包、证据与发布前审核；发布前必须复核。</p>
+                </div>
+                <span class="stage__status" id="stagePublishStatus"></span>
+              </div>
+              <div id="publishingPackage"></div>
+              <div id="requirementsSummary"></div>
+              <div class="professional-grid">
+                <aside class="evidence-column" aria-label="来源与证据">
+                  <div class="column-heading">
+                    <p class="eyebrow">证据摘要</p>
+                    <h3>来源与完整度</h3>
+                  </div>
+                  <div id="sourceSummary"></div>
+                  <div id="qualitySummary"></div>
+                  <div id="asrSummary"></div>
+                </aside>
+                <div class="professional-report">
+                  <div id="distillationReport"></div>
+                  <div id="trafficAssessment"></div>
+                  <div id="calibrationPlan"></div>
+                  <div id="audienceInsights"></div>
+                  <div id="localizationSummary"></div>
+                  <div id="evidenceRisks"></div>
+                  <div id="riskReview"></div>
+                </div>
+              </div>
+            </section>
+
+            <div class="report__footer">
+              <button class="button button--secondary" id="copyScriptButton" type="button" hidden>复制研究稿</button>
+              <button class="button button--secondary" id="saveDouyinTopicButton" type="button" hidden>保存为抖音选题</button>
+              <button class="button button--primary" id="publishExperimentButton" type="button" hidden>带入发布实验</button>
+              <a class="source-link" id="sourceLink" href="#" target="_blank" rel="noopener noreferrer" hidden>查看原内容</a>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <div class="copy-feedback" id="copyFeedback" role="status" aria-live="polite"></div>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  </body>
+</html>

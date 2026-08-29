@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>使用说明 · 对照阅读 — 自媒体通关搭档</title>
+<style>
+  :root{
+    --bg:#141719; --panel:#1d2225; --panel2:#232a2e; --line:#333c41;
+    --text:#e6ecea; --muted:#9aa8a3; --accent:#2fbf8f; --accent-dim:#1e7a5c;
+    --tech:#5aa9e6; --plain:#e6b45a; --code:#171c1f;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:"Segoe UI","Microsoft YaHei",system-ui,sans-serif;line-height:1.75}
+  header{position:sticky;top:0;z-index:10;background:rgba(20,23,25,.96);
+    backdrop-filter:blur(6px);border-bottom:1px solid var(--line);padding:14px 24px}
+  header h1{margin:0;font-size:18px;font-weight:600}
+  header p{margin:4px 0 0;color:var(--muted);font-size:13px}
+  .legend{display:flex;gap:14px;margin-top:8px;flex-wrap:wrap;font-size:12px}
+  .legend span{display:inline-flex;align-items:center;gap:6px;color:var(--muted)}
+  .dot{width:10px;height:10px;border-radius:3px;display:inline-block}
+  nav.toc{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+  nav.toc a{color:var(--accent);text-decoration:none;font-size:12px;padding:3px 10px;
+    border:1px solid var(--line);border-radius:99px;background:var(--panel)}
+  nav.toc a:hover{border-color:var(--accent)}
+  main{max-width:1500px;margin:0 auto;padding:24px}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px;
+    scroll-margin-top:130px}
+  @media(max-width:960px){.row{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    padding:20px 24px;overflow-wrap:break-word}
+  .card h2{margin:0 0 4px;font-size:16px;display:flex;align-items:center;gap:8px}
+  .card h2 .num{font-size:11px;font-weight:700;color:#0c0f10;border-radius:4px;
+    padding:2px 7px;flex:none}
+  .card.tech h2 .num{background:var(--tech)}
+  .card.plain h2 .num{background:var(--plain)}
+  .card.tech{border-top:3px solid var(--tech)}
+  .card.plain{border-top:3px solid var(--plain)}
+  .card h3{font-size:14px;margin:18px 0 6px;color:var(--accent)}
+  .card p{margin:8px 0;font-size:13.5px;color:var(--text)}
+  .card li{font-size:13.5px;margin:4px 0}
+  .card ul,.card ol{padding-left:22px;margin:6px 0}
+  code,pre{font-family:Consolas,"Courier New",monospace;font-size:12.5px}
+  code{background:var(--code);border:1px solid var(--line);border-radius:4px;
+    padding:1px 5px;color:#b8e6d4}
+  pre{background:var(--code);border:1px solid var(--line);border-radius:8px;
+    padding:14px;overflow-x:auto;color:#c9d6d1;line-height:1.6}
+  table{border-collapse:collapse;width:100%;margin:10px 0;font-size:12.5px}
+  th,td{border:1px solid var(--line);padding:7px 10px;text-align:left;vertical-align:top}
+  th{background:var(--panel2);color:var(--accent);font-weight:600}
+  blockquote{margin:10px 0;padding:8px 14px;border-left:3px solid var(--accent-dim);
+    background:var(--panel2);border-radius:0 6px 6px 0;color:var(--muted);font-size:13px}
+  strong{color:#fff}
+  .hint{color:var(--muted);font-size:12px;font-style:normal}
+  footer{max-width:1500px;margin:0 auto;padding:10px 24px 40px;color:var(--muted);
+    font-size:12px;text-align:center}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>自媒体通关搭档 v0.3 · 使用说明对照阅读</h1>
+  <p>左栏为技术底层逻辑说明（面向开发者），右栏为通俗易懂版说明（面向普通用户），两栏 12 章一一对应。</p>
+  <div class="legend">
+    <span><i class="dot" style="background:var(--tech)"></i>技术版 · 原理与实现</span>
+    <span><i class="dot" style="background:var(--plain)"></i>通俗版 · 功能与用法</span>
+  </div>
+  <nav class="toc">
+    <a href="#s1">1 定位</a><a href="#s2">2 组成</a><a href="#s3">3 主流程</a>
+    <a href="#s4">4 模块/功能</a><a href="#s5">5 证据与把关</a><a href="#s6">6 发布校准</a>
+    <a href="#s7">7 数据流</a><a href="#s8">8 API/操作</a><a href="#s9">9 性能</a>
+    <a href="#s10">10 安全</a><a href="#s11">11 部署/上手</a><a href="#s12">12 边界</a>
+  </nav>
+</header>
+
+<main>
+
+<!-- 1 -->
+<div class="row" id="s1">
+  <section class="card tech">
+    <h2><span class="num">1</span>系统定位与总体架构</h2>
+    <p>Windows 本机 Web 应用：用户提交公开抖音 / TikTok 单作品链接，系统完成媒体采集、字幕提取或本地转写、结构化研究稿生成，并保留证据链与发布前审核边界。</p>
+    <pre>前端层  index.html + app.js（工作台）
+        publish.html + publish.js（发布校准）
+API 层   FastAPI 单进程，监听 127.0.0.1:8792
+服务层   acquisition / douyin_media / tiktok_media
+        asr / content_generation / product_relevance
+        visual_analysis / publish_calibration
+执行层   独立 Python 子进程 Worker（隔离采集+ASR）
+        Node.js playwright-core（浏览器回退探测）
+存储层   var/acquisition/{job}/ + SQLite 校准库</pre>
+    <ul>
+      <li><strong>主进程不执行采集</strong>：API 只入队返回 <code>job_id</code>，采集在子进程完成，Worker 日志不进入默认响应。</li>
+      <li><strong>状态即文件</strong>：<code>request.json / status.json / evidence_manifest.json / raw/</code> 全部落盘，可恢复。</li>
+      <li><strong>单机单实例</strong>：多实例部署需外部队列、并发限制与清理策略（Docker 基础镜像已备）。</li>
+    </ul>
+  </section>
+  <section class="card plain">
+    <h2><span class="num">1</span>这是一个什么工具</h2>
+    <p><strong>你给它一条公开视频链接，它把能验证的字幕、公开数字和画面结构线索整理出来，再据此给你写一版研究稿。</strong></p>
+    <p>它像一位“内容研究员助理”：先梳理字幕和结构证据，再提出“为什么可能有效、哪些方法值得测试”的有边界假设；需要时还能生成新脚本、拍摄清单和发布用标题正文。</p>
+    <p>页面像闯关游戏，每条链接要过四关：</p>
+    <ol>
+      <li><strong>读懂链接</strong>——梳理当前能验证的内容和结构线索；</li>
+      <li><strong>拆出原创稿</strong>——写出你的新脚本；</li>
+      <li><strong>拍出来</strong>——给你照着执行的拍摄清单；</li>
+      <li><strong>把关发布</strong>——检查现有资料和规则缺口，最终仍由你确认。</li>
+    </ol>
+    <p>四关全亮才算"通关"；没过关的显示"待补充"，绝不假装完成。</p>
+  </section>
+</div>
+
+<!-- 2 -->
+<div class="row" id="s2">
+  <section class="card tech">
+    <h2><span class="num">2</span>核心技术栈</h2>
+    <table>
+      <tr><th>层</th><th>技术</th><th>用途与约束</th></tr>
+      <tr><td>API</td><td>Python 3.11+ / FastAPI / Pydantic</td><td>模型校验、静态挂载、multipart 上传</td></tr>
+      <tr><td>前端</td><td>原生 HTML/CSS/JS</td><td>无框架无外部字体；390px 移动适配</td></tr>
+      <tr><td>采集</td><td>yt-dlp 2026.7.4</td><td>TikTok 公开元数据与媒体</td></tr>
+      <tr><td>采集</td><td>douyin.wtf 公共 Provider（可替换）</td><td>非官方 SLA，失效触发回退</td></tr>
+      <tr><td>回退</td><td>playwright-core + Chrome/Edge</td><td>无登录态隔离浏览器上下文</td></tr>
+      <tr><td>媒体</td><td>ffmpeg / ffprobe</td><td>流校验、音轨、分离流、代表帧与候选切点</td></tr>
+      <tr><td>本地 ASR</td><td>faster-whisper + large-v3-turbo</td><td>CUDA int8_float16（RTX 4060 Ti），CPU int8 回退</td></tr>
+      <tr><td>内容生成</td><td>DeepSeek deepseek-chat</td><td>结构化研究稿/拍摄表/发布包</td></tr>
+      <tr><td>测试</td><td>unittest 99/99 + Playwright</td><td>状态机/并发/真实 FFmpeg/页面验收</td></tr>
+    </table>
+    <p class="hint">CUDA 12 运行库（约 2.08 GB）只装进项目虚拟环境，仅修改当前进程 DLL 搜索路径。</p>
+  </section>
+  <section class="card plain">
+    <h2><span class="num">2</span>它由哪些部分组成</h2>
+    <p>把它想象成一家小型工作室，四位"员工"各司其职：</p>
+    <table>
+      <tr><th>"员工"</th><th>干什么</th><th>类比</th></tr>
+      <tr><td>跑腿员</td><td>把你给的视频"借"回来研究</td><td>替你去图书馆借书</td></tr>
+      <tr><td>速记员</td><td>把视频里的话逐句记下来，标时间点</td><td>会议记录员</td></tr>
+      <tr><td>研究员</td><td>根据证据提出可验证假设</td><td>侦探整理线索</td></tr>
+      <tr><td>质检员</td><td>发布前最后把关</td><td>工厂出厂检验员</td></tr>
+    </table>
+    <p>程序、字幕听写、抽帧和记录在<strong>你自己的电脑上</strong>运行；获取公开视频会访问平台或公共采集通道，启用 DeepSeek 时还会把必要文字证据发给外部服务。工具不读取账号、密码、Cookie 或浏览器私人资料。</p>
+  </section>
+</div>
+
+<!-- 3 -->
+<div class="row" id="s3">
+  <section class="card tech">
+    <h2><span class="num">3</span>主链路流程：从链接到研究稿</h2>
+    <pre>POST /api/acquisition/jobs  → 入队，子进程 Worker 执行
+  状态机: queued → processing → completed|needs_input|failed
+  1 平台适配 + URL 规范化 + 作品号提取
+  2 TikTok: 代理预检 → yt-dlp 元数据 → 平台字幕优先
+    无字幕 → 音轨 → 本地 faster-whisper
+  2 抖音: 公共 Provider → 失效则隔离浏览器回退
+    分离音视频流按 Content-Range 选完整候选并合并
+  3 媒体流强制校验(视频流+音频流齐才进 ASR)
+  4 GPU 转写: large-v3-turbo 带时间码分段
+  5 精简证据清单(白名单字段 + SHA-256)
+  6 completed 任务写缓存
+前端轮询至终态 → POST .../analyze
+  拒绝非 completed/空字幕/无哈希/客户端 transcript 覆盖
+  已校验视频 → 本机代表帧+候选镜头结构（OCR 未安装则 unavailable）
+  精简清单 + 字幕 + 公开指标 + 收敛画面证据 → DeepSeek</pre>
+    <p>三个降级入口：手动字幕（<code>POST /api/analyze</code>，产出 <code>partial</code> 研究稿）、25 MB 媒体上传转写（<code>POST /api/transcribe</code>）、登记样本 fixture（标注 <code>registered_fixture</code> 来源）。</p>
+  </section>
+  <section class="card plain">
+    <h2><span class="num">3</span>从贴链接到出结果</h2>
+    <p>全程自动，你只需粘贴链接、点"开始"：</p>
+    <ol>
+      <li><strong>借视频</strong>：跑腿员先走"正门"；正门关了自动换"侧门"。两条路都不通时如实告诉你"这次取不到"，绝不拿假内容糊弄。</li>
+      <li><strong>记台词</strong>：有字幕直接用；没字幕就把声音交给"AI 速记员"听写成带时间点的文字稿。</li>
+      <li><strong>看节奏</strong>：抽最多 12 张真实代表帧，估算可能的镜头切换；不假装认识物体或画面文字。</li>
+      <li><strong>做分析</strong>：先给快速版结论，想要更多再展开完整报告。</li>
+      <li><strong>出成果</strong>：新脚本、拍摄清单、发布用标题正文。</li>
+    </ol>
+    <p><strong>同一个链接提交第二次，直接用上次的结果</strong>——像买过的东西放进了冰箱，不用再出门买。自动流程万一失败，还有备用入口：手动粘贴字幕或上传小段视频，不会把你卡死。</p>
+  </section>
+</div>
+
+<!-- 4 -->
+<div class="row" id="s4">
+  <section class="card tech">
+    <h2><span class="num">4</span>模块设计与交互</h2>
+    <h3>平台适配器（adapters/）</h3>
+    <p><code>detect_platform / canonical_url / extract_aweme_id</code>：URL 判平台、规范化去参（作缓存键）、提取稳定作品号；短链过期可从本机登记元数据恢复。YouTube/Facebook/X 已定义契约，状态 planned。</p>
+    <h3>采集任务管理（acquisition.py）</h3>
+    <p>任务 ID <code>acq_时间戳_hex12</code> 正则校验；只有 completed 进缓存，needs_input 绝不伪装；JSON 原子写（临时文件 + os.replace）。</p>
+    <h3>双通道采集</h3>
+    <p>抖音 Provider 优先 → 隔离浏览器回退（<code>douyin_browser_probe.cjs</code>，无登录态，按 media-video/media-audio 区分流）。签名地址只存在 Worker 内存。512 MiB 下载上限；TikTok 代理只检测不修改。</p>
+    <h3>画面结构 / ASR / 内容生成</h3>
+    <p>visual_analysis 只读清单内已校验视频：前 1200 秒、5fps scene score、最多 12 帧、512 MiB、90 秒总截止；切点与节奏仅为启发式，OCR 未安装时明确 unavailable。auto ASR = 外部→本地单选；采集 Worker 固定本地 ASR。DeepSeek 失败时降级为证据受限研究稿，<code>publishable=false</code> 不变。</p>
+    <h3>商品分流 / 前端状态机</h3>
+    <p>product_relevance：用户确认 &gt; 模型结果 &gt; 规则初判；缺口分 blocking_for_interpretation / optional_enhancements / product_for_rewrite_or_publish 三层。前端四关状态 locked/active/pending/cleared/blocked 由后端状态与发布门禁共同推导。</p>
+  </section>
+  <section class="card plain">
+    <h2><span class="num">4</span>每个功能是怎么设计的</h2>
+    <h3>两层结果，像先上小菜再上正餐</h3>
+    <p>第一层"快速看懂"：一句话结论、内容结构、有效原因、可借鉴方法；第二层"完整交付"：脚本、拍摄清单、发布内容包，需要时再展开。</p>
+    <h3>唯一推荐稿，不让你做拼图</h3>
+    <p>只给一版主稿，拿到手就能用。</p>
+    <h3>拍摄清单像菜谱</h3>
+    <p>什么时间、拍什么画面、说什么口播、写什么字幕、商品证明放哪，一行行列清楚，照着拍就行。</p>
+    <h3>真实代表帧与机器估算分开说</h3>
+    <p>页面会展示真正抽出的画面，并把候选镜头节奏标成“机器估算”；没有 OCR 时直接写明，绝不拿切点数量冒充看懂画面。</p>
+    <h3>先问"是不是卖货内容"</h3>
+    <p>是商品内容→告诉你补哪些商品资料；不是→走普通分析不来烦你；拿不准→显示"待确认"，你一键告诉它是或不是，你的判断永远优先。</p>
+    <h3>数字旁边都有"查看依据"</h3>
+    <p>像超市小票——可以不看，但必须给你留着。</p>
+  </section>
+</div>
+
+<!-- 5 -->
+<div class="row" id="s5">
+  <section class="card tech">
+    <h2><span class="num">5</span>证据体系与发布前审核</h2>
+    <ul>
+      <li><strong>精简清单</strong>：真实样本约 5 KB，含来源、稳定 ID、字幕分段与 5 个带 SHA-256 的白名单产物；<code>raw_artifacts_included=false</code>，原始媒体默认不进分析上下文，核对时按白名单定向读取。</li>
+      <li><strong>元数据脱敏</strong>：只保留公开字段，URL 规范化去签名参数；不保存 Provider 完整响应、签名地址、share_sign、did/iid、Cookie、请求头。</li>
+      <li><strong>发布前审核门禁</strong>（API 兼容字段 <code>risk_gate</code>）：商品资料缺失 / 未复核 / 只有字幕无实时指标与完整证据 / 人工审核未完成 → 强制 <code>publishable=false</code>，只能产出研究稿。模型生成成功不能改变门禁。</li>
+    </ul>
+  </section>
+  <section class="card plain">
+    <h2><span class="num">5</span>为什么它"说话有据"，不让你乱发</h2>
+    <p>这个工具最重要的性格：<strong>宁可少说，绝不乱说。</strong></p>
+    <ul>
+      <li>稿子分两种身份——"研究稿"和"可发布稿"。资料不全只给研究稿，并标注"不能直接发布"——菜没熟绝不端上桌。</li>
+      <li>要升级成可发布稿，得补齐商品资料、证据和人工确认，谁也不能跳过，AI 自己生成的内容也不例外。</li>
+      <li>发布前把关检查：商品信息全不全、有没有夸大或违规的说法（如保健品不能乱承诺功效）、证据够不够。</li>
+      <li>从不承诺"发出去一定火"。</li>
+    </ul>
+    <p>对你意味着：看到“待补充”就先补资料；“已通关”只表示程序内检查项已满足，正式发布仍由你人工确认，也不代表平台审核或法律意见。</p>
+  </section>
+</div>
+
+<!-- 6 -->
+<div class="row" id="s6">
+  <section class="card tech">
+    <h2><span class="num">6</span>发布校准闭环（P3-01）</h2>
+    <p>自包含页面 <code>static/publish.html</code>，方法复用项目019。状态机 <code>predicted → published → measured → reviewed</code>：</p>
+    <ol>
+      <li><strong>登记+盲预测</strong>：7 维打分 + 曝光、播放、点赞、评论、分享、涨粉、留存率的 T+72h 区间，发布前必须提交。</li>
+      <li><strong>发布登记</strong> → <strong>同窗口回填</strong> → <strong>复盘</strong>：区分偏乐观/命中/偏保守，只给下一轮单变量实验假设。</li>
+    </ol>
+    <p>SQLite WAL 保存当前状态，不可更新/删除的事件表追加历史；旧 JSONL 只读迁移且不修改源文件。有效复盘少于 3 条时明确证据不足，不输出确定性流量承诺。</p>
+  </section>
+  <section class="card plain">
+    <h2><span class="num">6</span>积累校准证据，不假装自动变准</h2>
+    <p>独立页面"发布校准"，像<strong>错题本 + 存折</strong>的组合：</p>
+    <ol>
+      <li><strong>发布前先“押题”</strong>：七项打分，并写下发布后 72 小时的七项指标区间。</li>
+      <li><strong>发布后“对答案”</strong>：满同一 72 小时窗口后填真实数据。</li>
+      <li><strong>计算偏差</strong>：告诉你偏乐观、命中还是偏保守，给下一轮单变量实验建议。</li>
+    </ol>
+    <p>它帮你积累证据，但不会自动训练或保证越来越准。少于 3 条有效复盘时明确写“证据不足”；建议始终是待验证假设，只有你确认过才沉淀。</p>
+  </section>
+</div>
+
+<!-- 7 -->
+<div class="row" id="s7">
+  <section class="card tech">
+    <h2><span class="num">7</span>数据流向与存储</h2>
+    <pre>用户浏览器
+  │ 链接 /(降级)字幕 / ≤25MB 媒体 / 商品资料
+  ▼
+FastAPI 主进程（不持久化请求体）
+  ├ var/acquisition/acq_*/request.json
+  ├ var/acquisition/acq_*/status.json
+  ├ var/acquisition/acq_*/evidence_manifest.json
+  ├ var/acquisition/acq_*/raw/        # 白名单原始产物
+  ├ var/acquisition/acq_*/visual_analysis/ # 代表帧/结构报告
+  ├ var/acquisition/cache/            # completed 缓存
+  ├ var/publish_calibration/calibration.sqlite3
+  └ .cache/faster-whisper/            # 模型缓存(G盘)</pre>
+    <ul>
+      <li>分析输入 = 精简清单 + Worker 字幕 + 公开指标，原始证据默认隔离。</li>
+      <li>上传媒体只在本次请求处理，<code>source.retained=false</code>；外部 provider 时会发送到第三方（部署前需隐私确认）。</li>
+      <li>Git 排除凭据、模型、虚拟环境、缓存、运行任务、真实媒体、素材与生成产物。</li>
+    </ul>
+  </section>
+  <section class="card plain">
+    <h2><span class="num">7</span>你的资料都去哪了</h2>
+    <p>三句话讲清白：</p>
+    <ol>
+      <li><strong>本机处理和保存</strong>。采集产物、字幕、代表帧和实验记录在本机；获取公开内容和可选 DeepSeek 生成仍会访问外部服务。</li>
+      <li><strong>只看公开内容</strong>。只处理你主动给的公开视频链接，不碰账号密码，不看你任何平台的登录信息，也绝不自动替你发内容。</li>
+      <li><strong>原始视频受控保存</strong>。默认分析只读精简清单；完整媒体、字幕和代表帧位于任务独立目录，程序按白名单定向读取。</li>
+    </ol>
+    <p>唯一例外：配置了付费 AI 服务时，生成稿子会调用外部服务并产生少量费用；不想用，启动时选"零付费模式"。</p>
+  </section>
+</div>
+
+<!-- 8 -->
+<div class="row" id="s8">
+  <section class="card tech">
+    <h2><span class="num">8</span>API 设计</h2>
+    <table>
+      <tr><th>方法与路径</th><th>用途</th><th>关键约束</th></tr>
+      <tr><td><code>GET /api/health</code></td><td>状态/版本/付费开关</td><td>—</td></tr>
+      <tr><td><code>GET /api/platforms</code></td><td>平台能力</td><td>douyin/tiktok=active</td></tr>
+      <tr><td><code>GET /api/demo</code></td><td>登记样本</td><td>标注 fixture 来源</td></tr>
+      <tr><td><code>POST /api/acquisition/jobs</code></td><td>创建采集任务</td><td>主进程只入队</td></tr>
+      <tr><td><code>GET .../jobs/{id}</code></td><td>状态/进度/缺失项</td><td>—</td></tr>
+      <tr><td><code>GET .../manifest</code></td><td>精简证据包</td><td>raw 不默认包含</td></tr>
+      <tr><td><code>GET .../artifacts/{name}</code></td><td>读白名单原始文件</td><td>文件名正则白名单</td></tr>
+      <tr><td><code>POST .../{id}/visual-analysis</code></td><td>抽帧与候选镜头结构</td><td>已校验视频；512 MiB/90 秒</td></tr>
+      <tr><td><code>POST .../jobs/{id}/analyze</code></td><td>完成态进分析</td><td>拒绝空字幕/覆盖</td></tr>
+      <tr><td><code>POST /api/analyze</code></td><td>直接分析(降级)</td><td>quick/full 模式</td></tr>
+      <tr><td><code>POST /api/transcribe</code></td><td>上传转写</td><td>multipart, 25MB</td></tr>
+      <tr><td><code>/api/publish/...</code> 共 8 个</td><td>校准闭环与事件/摘要</td><td>严格状态机；样本不足边界</td></tr>
+    </table>
+    <p>自动化可用单命令 <code>python -m app.acquisition_cli --url &lt;链接&gt;</code>，等终态输出精简 JSON。</p>
+  </section>
+  <section class="card plain">
+    <h2><span class="num">8</span>页面上的每个按钮</h2>
+    <ul>
+      <li><strong>链接输入框 + "开始分析"</strong>：唯一主操作。</li>
+      <li><strong>提交中/解读中提示</strong>：随时知道进行到哪一步。</li>
+      <li><strong>商品属性栏</strong>：商品判定结果和依据；拿不准时有"是/否"确认按钮。</li>
+      <li><strong>四关进度条</strong>：点亮几关一目了然，点每关跳到对应结果区。</li>
+      <li><strong>结果区</strong>：先看快速结论，完整内容逐层展开。</li>
+      <li><strong>画面结构证据</strong>：真实代表帧、覆盖时长、候选节奏与 OCR 缺失说明。</li>
+      <li><strong>"查看依据"按钮</strong>：每个数字旁边都有。</li>
+      <li><strong>"复制研究稿"按钮</strong>：按钮叫什么就复制什么，绝不名不副实。</li>
+      <li><strong>备用入口（默认收起）</strong>：字幕粘贴、视频上传，只在自动流程失败时用。</li>
+      <li><strong>发布校准页</strong>：登记实验→填预测→回填数据→看复盘，按顺序点下去。</li>
+    </ul>
+  </section>
+</div>
+
+<!-- 9 -->
+<div class="row" id="s9">
+  <section class="card tech">
+    <h2><span class="num">9</span>性能实现与实测基线</h2>
+    <ul>
+      <li><strong>本地 ASR（cuda/int8_float16）</strong>：冷启动 7.88 s；热启动总计 3.576 s。35 s 视频 238 字符 5 段；255 s 分离流 1,652 字符 149 段；27 分钟（264 MB）10,851 字符 1,185 段，无 CPU 回退。</li>
+      <li><strong>DeepSeek 完整解读</strong>：8,536 tokens、20.38 s，267 字研究稿 + 10 段拍摄表。</li>
+      <li><strong>缓存</strong>：同链接+参数二次提交直接命中；跨短链按稳定作品号复用。</li>
+      <li><strong>分层结果</strong>：quick 短输出优先返回。</li>
+      <li><strong>画面结构</strong>：真实任务覆盖 9.567 秒，12 张 576×1024 JPEG，OCR unavailable。</li>
+      <li><strong>当前回归</strong>：Python 99/99；主页 26/26、发布页 30/30、画面页 13/13；控制台/请求/溢出均为 0。</li>
+    </ul>
+  </section>
+  <section class="card plain">
+    <h2><span class="num">9</span>速度与稳定</h2>
+    <ul>
+      <li><strong>短视频</strong>：从提交到出结果，通常几十秒到一两分钟。</li>
+      <li><strong>听写很快</strong>：半分钟的视频几秒钟记完；27 分钟长视频也能完整处理。</li>
+      <li><strong>重复提交同一链接</strong>：直接出上次结果，几乎瞬间。</li>
+      <li><strong>网络小波动不娇气</strong>：正门关了自动换侧门；TikTok 需要的网络环境没开会明确提示，而不是莫名其妙报错。</li>
+      <li>速度的底气来自你自己的电脑：有独立显卡，听写就在显卡上飞快完成，不花一分钱。</li>
+    </ul>
+  </section>
+</div>
+
+<!-- 10 -->
+<div class="row" id="s10">
+  <section class="card tech">
+    <h2><span class="num">10</span>安全设计</h2>
+    <ul>
+      <li><strong>网络边界</strong>：只监听 127.0.0.1；正式部署需反代 + HTTPS + 访问控制。</li>
+      <li><strong>凭据管理</strong>：密钥只在服务端环境变量；错误信息经正则脱敏（Bearer/sk-rk-pk/api_key/token/secret/URL 参数）。</li>
+      <li><strong>无登录态</strong>：不读 Cookie、密码、本地存储；隔离浏览器无登录上下文；不自动发布。</li>
+      <li><strong>元数据最小化</strong> + <strong>资源防护</strong>（25 MB 上传 / 512 MiB 下载和画面分析上限 / 画面分析 90 秒总截止 / 原子写）。</li>
+      <li><strong>信息分层</strong>：技术元数据只进 diagnostics；前端反向禁显验收（不得出现 Token、json_object、任务号、内部路径、64 位哈希）。</li>
+      <li><strong>DLL 隔离</strong>：CUDA 库不改系统 PATH。</li>
+    </ul>
+  </section>
+  <section class="card plain">
+    <h2><span class="num">10</span>安全与隐私</h2>
+    <ul>
+      <li><strong>不碰账号</strong>：不需要登录任何平台，不存密码。</li>
+      <li><strong>不偷看</strong>：不读你浏览器里的任何私人数据。</li>
+      <li><strong>不乱发</strong>：发布按钮永远在你自己手里。</li>
+      <li><strong>钥匙锁好</strong>：付费服务密钥只存在你电脑的配置里，不进页面、文档或记录。</li>
+      <li><strong>有界限</strong>：超大的视频文件会明确拒绝，防止撑爆硬盘。</li>
+      <li><strong>只管本机</strong>：外面的人访问不到。</li>
+    </ul>
+  </section>
+</div>
+
+<!-- 11 -->
+<div class="row" id="s11">
+  <section class="card tech">
+    <h2><span class="num">11</span>部署与运行</h2>
+    <p>要求：Windows、Python 3.11+、Node.js、Chrome/Edge、ffmpeg/ffprobe。</p>
+    <pre>cd 工作文件\app
+npm install                # 首次：浏览器探测依赖
+.\demo-v03.ps1             # 甲方演示入口(127.0.0.1:8792)
+.\run.ps1                  # 开发模式(8787, /docs)</pre>
+    <ul>
+      <li>重复运行复用同一健康服务 PID；默认启用付费 Provider，<code>-DisablePaidContent</code> 切零付费。</li>
+      <li>环境变量分组：采集（ACQUISITION_ROOT / DOUYIN_PUBLIC_API_BASE）、外部 ASR、本地 ASR、内容生成（DEEPSEEK_* / PROJECT024_CONTENT_*）。</li>
+      <li>测试：unittest、<code>node --check app.js</code>、浏览器验收脚本。</li>
+      <li>Docker：<code>docker build -t self-media-growth-partner .</code>（生产配套见第 1 章）。</li>
+    </ul>
+  </section>
+  <section class="card plain">
+    <h2><span class="num">11</span>怎么装、怎么开</h2>
+    <p>如果在这台已装好的电脑上用，什么都不用装。<strong>日常两步：</strong></p>
+    <ol>
+      <li>双击桌面快捷方式（或项目根目录"项目024_v0.3_甲方演示.cmd"）；</li>
+      <li>浏览器打开本地页面（127.0.0.1:8792 开头，只属于你的电脑），粘贴链接开用。</li>
+    </ol>
+    <p>小贴士：重复双击不会开第二个；分析 TikTok 前先开网络工具（VPN）；想零成本就带"零付费模式"启动。换新电脑安装时，请懂技术的同事照技术版第 11 章操作。</p>
+  </section>
+</div>
+
+<!-- 12 -->
+<div class="row" id="s12">
+  <section class="card tech">
+    <h2><span class="num">12</span>边界与已知限制</h2>
+    <ul>
+      <li>douyin.wtf 非官方 SLA；限流/失效依赖隔离浏览器回退，双失败才 needs_input；平台变化可能要求更新探测器（保留可替换适配层）。</li>
+      <li>回退已验 35 s 合并与 255 s 分离流；分段媒体/地区页面/更多编码仍需抽样；超 512 MiB 阻断。</li>
+      <li>代表帧与候选镜头结构已接入；OCR、公开评论、主页多作品、手机端真实验收仍是后续任务。</li>
+      <li>字幕、代表帧和切点统计不能替代画面语义理解；needs_confirmation 可由用户确认修正。</li>
+      <li>v0.2 历史交付目录待归档（P2-02）；外部备份可回滚但非第二运行版本。</li>
+      <li>默认演示调用 DeepSeek 产生费用。</li>
+    </ul>
+  </section>
+  <section class="card plain">
+    <h2><span class="num">12</span>现在还做不到的事</h2>
+    <ul>
+      <li><strong>只认单条视频链接</strong>：账号主页全部作品、评论区暂不支持。</li>
+      <li><strong>能抽帧、能估算剪辑点，但还不能真正看懂画面</strong>：没有 OCR，不能读画面文字，也不能仅凭切点数判断物体和动作。</li>
+      <li><strong>只支持两个平台</strong>：抖音和 TikTok；YouTube、Facebook、X 在计划中。</li>
+      <li><strong>手机上用还差点火候</strong>：目前在电脑浏览器里用。</li>
+      <li><strong>发出去不保证火</strong>：它把内容和把关做扎实，但流量没人能打包票。</li>
+      <li><strong>偶尔取不到视频</strong>：平台接口偶尔抽风，它会如实说"没取到"，重试或换链接即可。</li>
+    </ul>
+    <blockquote><strong>一句话总结</strong>：这是一个住在你自己电脑里、诚实到有点较真的"自媒体研究助理"——你给它一条链接，它还你一套看得懂、用得上、有依据、能复盘的内容方案。</blockquote>
+  </section>
+</div>
+
+</main>
+<footer>自媒体通关搭档 v0.3.0 · 技术版与通俗版完整全文见《项目文档/使用说明_技术版.md》与《使用说明_通俗版.md》 · 2026-08-22</footer>
+</body>
+</html>

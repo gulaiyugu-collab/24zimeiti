@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import math
 import os
@@ -35,6 +36,59 @@ class ContentGenerationResult:
     provider: str
     model: str
     provider_metadata: dict[str, Any]
+
+
+_FULL_AGENT_ROLES: tuple[tuple[str, str], ...] = (
+    (
+        "source_analyst",
+        "你是来源结构分析 Agent。只提炼内容结构、观众需求、可迁移方法和关键证据，不写最终脚本。",
+    ),
+    (
+        "evidence_auditor",
+        "你是证据与风险审查 Agent。重点核对事实、推断、待确认项、商品属性和发布风险，不写最终脚本。",
+    ),
+    (
+        "originality_editor",
+        "你是原创编辑 Agent。寻找不复刻来源的原创切入点、叙事顺序和表达取舍，不写最终脚本。",
+    ),
+)
+_QUICK_AGENT_ROLES: tuple[tuple[str, str], ...] = _FULL_AGENT_ROLES[:2]
+_SYNTHESIS_INSTRUCTION = (
+    "你是总编合成 Agent。下面的 agent_outputs 只是其他 Agent 的候选意见，"
+    "不能替代原始字幕、用户资料和 visual_evidence；事实必须回到原始证据，"
+    "冲突意见要保留为推断或待确认项。最终只输出当前接口要求的 JSON。"
+)
+
+
+def _bounded_value(value: Any, *, depth: int = 0) -> Any:
+    """Keep fan-in context bounded without changing the source evidence."""
+    if depth > 4:
+        return "[truncated]"
+    if isinstance(value, str):
+        return value[:800]
+    if isinstance(value, list):
+        return [_bounded_value(item, depth=depth + 1) for item in value[:8]]
+    if isinstance(value, dict):
+        return {
+            str(key): _bounded_value(item, depth=depth + 1)
+            for key, item in list(value.items())[:24]
+        }
+    return value
+
+
+def _bounded_agent_outputs(outputs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [_bounded_value(output) for output in outputs]
+
+
+def _sum_usage(usages: list[dict[str, int] | None]) -> dict[str, int] | None:
+    totals: dict[str, int] = {}
+    for usage in usages:
+        if not isinstance(usage, dict):
+            continue
+        for key, value in usage.items():
+            if isinstance(value, int) and not isinstance(value, bool):
+                totals[key] = totals.get(key, 0) + value
+    return totals or None
 
 
 def _env_float(name: str, default: float, minimum: float, maximum: float) -> float:
@@ -319,6 +373,107 @@ def _safe_usage(value: Any) -> dict[str, int] | None:
     return usage or None
 
 
+_VISUAL_EVIDENCE_SYSTEM_GUARDRAIL = (
+    "视觉数据只能作为字幕和用户资料的补充证据，不能取代字幕或人工核验。"
+    "scene_structure 中的镜头切点、分段数和节奏都是机器估算，不是人工确认。"
+    "不得根据抽帧数量、镜头数量或视频尺寸推断人物、物体、场景或内容语义。"
+    "当 visual_evidence.ocr.status 为 unavailable 时，必须明确没有取得画面文字，"
+    "禁止声称看到了画面文字或物体。即使 OCR 可用，也只能引用给出的 text_items，"
+    "不得据此补写未提供的画面事实。"
+)
+
+
+def _visual_text(value: Any, *, limit: int = 80) -> str | None:
+    if not isinstance(value, str):
+        return None
+    normalized = " ".join(value.split()).strip()
+    return normalized[:limit] or None
+
+
+def _visual_number(value: Any, *, integer: bool = False) -> int | float | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    numeric = float(value)
+    if not math.isfinite(numeric) or numeric < 0:
+        return None
+    if integer:
+        if not numeric.is_integer():
+            return None
+        return int(numeric)
+    return round(numeric, 3)
+
+
+def _sanitize_visual_evidence(
+    visual_evidence: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    """Return the small, prompt-safe subset of local visual analysis.
+
+    This is intentionally a constructive allow-list.  Frame artifacts, URLs,
+    filesystem paths, hashes, job identifiers and analyzer configuration never
+    enter the returned object, even if a caller adds them to the source report.
+    """
+    if visual_evidence is None:
+        return None
+    if not isinstance(visual_evidence, dict):
+        return None
+
+    sanitized: dict[str, Any] = {}
+
+    raw_probe = visual_evidence.get("probe")
+    if isinstance(raw_probe, dict):
+        probe: dict[str, Any] = {}
+        for key in ("coverage_seconds",):
+            if (value := _visual_number(raw_probe.get(key))) is not None:
+                probe[key] = value
+        if isinstance(raw_probe.get("truncated"), bool):
+            probe["truncated"] = raw_probe["truncated"]
+        for key in ("width", "height"):
+            if (value := _visual_number(raw_probe.get(key), integer=True)) is not None:
+                probe[key] = value
+        if probe:
+            sanitized["probe"] = probe
+
+    raw_scene = visual_evidence.get("scene_structure")
+    if isinstance(raw_scene, dict):
+        scene: dict[str, Any] = {}
+        if (value := _visual_text(raw_scene.get("method"))) is not None:
+            scene["method"] = value
+        for key in ("candidate_cut_count", "estimated_segment_count"):
+            if (value := _visual_number(raw_scene.get(key), integer=True)) is not None:
+                scene[key] = value
+        if (value := _visual_number(raw_scene.get("cuts_per_minute"))) is not None:
+            scene["cuts_per_minute"] = value
+        if (value := _visual_text(raw_scene.get("pace"))) is not None:
+            scene["pace"] = value
+        if scene:
+            sanitized["scene_structure"] = scene
+
+    raw_ocr = visual_evidence.get("ocr")
+    if isinstance(raw_ocr, dict):
+        ocr: dict[str, Any] = {}
+        for key in ("status", "provider", "reason_code"):
+            raw_value = raw_ocr.get(key)
+            if key == "provider" and raw_value is None and key in raw_ocr:
+                ocr[key] = None
+            elif (value := _visual_text(raw_value)) is not None:
+                ocr[key] = value
+        raw_text_items = raw_ocr.get("text_items")
+        ocr_unavailable = str(ocr.get("status") or "").lower() == "unavailable"
+        if isinstance(raw_text_items, list) and not ocr_unavailable:
+            text_items: list[str] = []
+            for item in raw_text_items:
+                raw_text = item.get("text") if isinstance(item, dict) else item
+                if (value := _visual_text(raw_text, limit=200)) is not None:
+                    text_items.append(value)
+                if len(text_items) >= 20:
+                    break
+            ocr["text_items"] = text_items
+        if ocr:
+            sanitized["ocr"] = ocr
+
+    return sanitized
+
+
 class DeepSeekContentProvider:
     """Generate a structured research draft from verified text and client facts."""
 
@@ -351,6 +506,9 @@ class DeepSeekContentProvider:
         product_context: str | None,
         product: dict[str, Any] | None,
         product_relevance: dict[str, Any] | None = None,
+        visual_evidence: dict[str, Any] | None = None,
+        collaboration_context: list[dict[str, Any]] | None = None,
+        role_instruction: str | None = None,
     ) -> ContentGenerationResult:
         secret = _deepseek_key()
         if not secret:
@@ -363,7 +521,8 @@ class DeepSeekContentProvider:
         }
         system_prompt = (
             "你是项目024自媒体通关搭档的内容编排器。"
-            "只依据用户提供的字幕和资料生成中文内容研究稿，先判断是否具有商品属性。"
+            "只依据用户提供的字幕、资料和visual_evidence白名单生成中文内容研究稿，"
+            "先判断是否具有商品属性。"
             "如果没有商品属性，不要生成商品名称、核心卖点、规格或证明材料清单。"
             "如果待确认，只给出判断依据和确认建议，不要阻塞普通内容解读。"
             "不得把推断写成商品事实；缺失信息必须写成[待确认：字段]。"
@@ -372,19 +531,25 @@ class DeepSeekContentProvider:
             "shooting_table必须包含6-10个连续时间段。"
             "地区本地化在v0.2未启用，不得自行添加地区俚语或市场事实。"
             "所有输出都只是研究稿，publishable必须为false，禁止声称可直接发布。"
-            "返回严格JSON对象，不要Markdown。"
+            + _VISUAL_EVIDENCE_SYSTEM_GUARDRAIL
+            + (role_instruction or "")
+            + "返回严格JSON对象，不要Markdown。"
         )
         user_payload = {
             "platform": platform,
             "transcript": transcript,
             "product": product_payload,
             "inferred_product_relevance": product_relevance,
+            "visual_evidence": _sanitize_visual_evidence(visual_evidence),
             "required_schema": {
                 "summary": "甲方可读的一句话结论",
                 "product_relevance": {
                     "status": "has_product、no_product 或 needs_confirmation",
                     "confidence": "high、medium 或 low",
-                    "evidence": ["引用字幕或画面中的判断依据"],
+                    "evidence": [
+                        "引用字幕、用户资料或已提供的OCR text_items；"
+                        "没有OCR文本时不得声称依据来自画面"
+                    ],
                     "reason": "用普通话说明为什么这样判断",
                     "follow_up": ["后续建议；无商品时明确无需补商品资料"],
                 },
@@ -426,6 +591,8 @@ class DeepSeekContentProvider:
                 },
             },
         }
+        if collaboration_context:
+            user_payload["agent_outputs"] = _bounded_agent_outputs(collaboration_context)
         request_payload = {
             "model": model,
             "messages": [
@@ -499,6 +666,9 @@ class DeepSeekContentProvider:
         product_context: str | None,
         product: dict[str, Any] | None,
         product_relevance: dict[str, Any] | None = None,
+        visual_evidence: dict[str, Any] | None = None,
+        collaboration_context: list[dict[str, Any]] | None = None,
+        role_instruction: str | None = None,
     ) -> ContentGenerationResult:
         """Return a compact, user-facing understanding before the full package."""
         secret = _deepseek_key()
@@ -511,12 +681,16 @@ class DeepSeekContentProvider:
             "transcript": transcript,
             "product": {"free_text": product_context, "structured": product},
             "inferred_product_relevance": product_relevance,
+            "visual_evidence": _sanitize_visual_evidence(visual_evidence),
             "required_schema": {
                 "summary": "用普通人能看懂的一句话说明这条内容在讲什么",
                 "product_relevance": {
                     "status": "has_product、no_product 或 needs_confirmation",
                     "confidence": "high、medium 或 low",
-                    "evidence": ["字幕或画面中能支持判断的依据"],
+                    "evidence": [
+                        "字幕、用户资料或已提供的OCR text_items中的依据；"
+                        "没有OCR文本时不得声称依据来自画面"
+                    ],
                     "reason": "判断原因",
                     "follow_up": ["后续建议"],
                 },
@@ -531,11 +705,17 @@ class DeepSeekContentProvider:
                 },
             },
         }
+        if collaboration_context:
+            user_payload["agent_outputs"] = _bounded_agent_outputs(collaboration_context)
         system_prompt = (
-            "你是项目024的快速内容解读器。只依据用户提供的字幕和商品资料，"
+            "你是项目024的快速内容解读器。只依据用户提供的字幕、商品资料和"
+            "visual_evidence白名单，"
             "用普通人能看懂的中文解释内容，不生成完整脚本，不补写商品事实，"
             "不把推断写成事实，不复刻来源原句。先判断商品属性；"
-            "无商品时不要列商品资料缺失。只返回严格JSON对象。"
+            "无商品时不要列商品资料缺失。"
+            + _VISUAL_EVIDENCE_SYSTEM_GUARDRAIL
+            + (role_instruction or "")
+            + "只返回严格JSON对象。"
         )
         request_payload = {
             "model": model,
@@ -606,23 +786,187 @@ class ContentGenerationRouter:
     def __init__(self, provider: DeepSeekContentProvider | None = None) -> None:
         self.provider = provider or DeepSeekContentProvider()
 
-    def plan(self) -> dict[str, Any]:
+    @staticmethod
+    def _strategy(value: Any = None) -> str:
+        selected = str(
+            value or os.getenv("PROJECT024_CONTENT_STRATEGY", "multi_agent")
+        ).strip().lower()
+        return "single_model" if selected in {"single", "single_model", "single-agent"} else "multi_agent"
+
+    def plan(self, strategy: Any = None) -> dict[str, Any]:
         availability = self.provider.availability()
+        orchestration_mode = self._strategy(strategy)
         return {
             "status": "ready" if availability["configured"] else "not_configured",
             "provider": availability["provider"],
             "model": availability["model"],
             "configured": availability["configured"],
             "paid_api_called": False,
+            "orchestration_mode": orchestration_mode,
+            "requested_roles": [role for role, _ in _FULL_AGENT_ROLES]
+            if orchestration_mode == "multi_agent"
+            else [],
             "message": availability["reason"],
         }
 
-    async def generate(self, **kwargs: Any) -> ContentGenerationResult | None:
-        if not self.provider.availability()["configured"]:
-            return None
-        return await self.provider.generate(**kwargs)
+    @staticmethod
+    def _summary(outcome: dict[str, Any]) -> dict[str, Any]:
+        return {
+            key: outcome[key]
+            for key in ("role", "status", "provider", "model", "usage", "error")
+            if key in outcome and outcome[key] is not None
+        }
 
-    async def generate_quick(self, **kwargs: Any) -> ContentGenerationResult | None:
+    @staticmethod
+    def _with_orchestration(
+        result: ContentGenerationResult,
+        orchestration: dict[str, Any],
+    ) -> ContentGenerationResult:
+        metadata = dict(result.provider_metadata)
+        metadata["orchestration"] = orchestration
+        return ContentGenerationResult(
+            data=result.data,
+            provider=result.provider,
+            model=result.model,
+            provider_metadata=metadata,
+        )
+
+    async def _run_role(
+        self,
+        method: Callable[..., Any],
+        role: str,
+        instruction: str,
+        kwargs: dict[str, Any],
+    ) -> dict[str, Any]:
+        try:
+            result = await method(**kwargs, role_instruction=instruction)
+            return {
+                "role": role,
+                "status": "completed",
+                "provider": result.provider,
+                "model": result.model,
+                "usage": result.provider_metadata.get("usage"),
+                "result": result.data,
+            }
+        except Exception as exc:
+            return {
+                "role": role,
+                "status": "failed",
+                "error": _sanitize_error_text(exc),
+            }
+
+    async def _fallback(
+        self,
+        method: Callable[..., Any],
+        kwargs: dict[str, Any],
+        orchestration: dict[str, Any],
+    ) -> ContentGenerationResult:
+        try:
+            result = await method(**kwargs)
+        except Exception as exc:
+            orchestration["fallback_error"] = _sanitize_error_text(exc)
+            raise
+        orchestration["mode"] = "single_agent_fallback"
+        orchestration["fallback_used"] = True
+        orchestration["call_count"] = int(orchestration.get("call_count", 0)) + 1
+        return self._with_orchestration(result, orchestration)
+
+    async def _multi_agent_generate(
+        self,
+        *,
+        role_method: Callable[..., Any],
+        synthesis_method: Callable[..., Any],
+        roles: tuple[tuple[str, str], ...],
+        kwargs: dict[str, Any],
+    ) -> ContentGenerationResult:
+        outcomes = await asyncio.gather(
+            *(self._run_role(role_method, role, instruction, kwargs) for role, instruction in roles)
+        )
+        completed = [outcome for outcome in outcomes if outcome["status"] == "completed"]
+        orchestration: dict[str, Any] = {
+            "mode": "multi_agent",
+            "requested_roles": [role for role, _ in roles],
+            "completed_roles": [outcome["role"] for outcome in completed],
+            "failed_roles": [outcome["role"] for outcome in outcomes if outcome["status"] != "completed"],
+            "fanout_count": len(outcomes),
+            "fan_in_status": "pending",
+            "fallback_used": False,
+            "role_runs": [self._summary(outcome) for outcome in outcomes],
+            "call_count": len(outcomes),
+        }
+        if len(completed) < 2:
+            orchestration["fan_in_status"] = "skipped_insufficient_roles"
+            return await self._fallback(synthesis_method, kwargs, orchestration)
+
+        synthesis_kwargs = dict(kwargs)
+        synthesis_kwargs["collaboration_context"] = completed
+        synthesis_kwargs["role_instruction"] = _SYNTHESIS_INSTRUCTION
+        try:
+            result = await synthesis_method(**synthesis_kwargs)
+        except Exception as exc:
+            orchestration["fan_in_status"] = "failed"
+            orchestration["fan_in_error"] = _sanitize_error_text(exc)
+            return await self._fallback(synthesis_method, kwargs, orchestration)
+        orchestration["fan_in_status"] = "completed"
+        orchestration["call_count"] = len(outcomes) + 1
+        return self._with_orchestration(result, orchestration)
+
+    async def generate(
+        self,
+        *,
+        strategy: Any = None,
+        **kwargs: Any,
+    ) -> ContentGenerationResult | None:
         if not self.provider.availability()["configured"]:
             return None
-        return await self.provider.generate_quick(**kwargs)
+        if self._strategy(strategy) == "single_model":
+            result = await self.provider.generate(**kwargs)
+            return self._with_orchestration(
+                result,
+                {
+                    "mode": "single_model",
+                    "requested_roles": [],
+                    "completed_roles": [],
+                    "failed_roles": [],
+                    "fanout_count": 0,
+                    "fan_in_status": "not_requested",
+                    "fallback_used": False,
+                    "call_count": 1,
+                },
+            )
+        return await self._multi_agent_generate(
+            role_method=self.provider.generate_quick,
+            synthesis_method=self.provider.generate,
+            roles=_FULL_AGENT_ROLES,
+            kwargs=kwargs,
+        )
+
+    async def generate_quick(
+        self,
+        *,
+        strategy: Any = None,
+        **kwargs: Any,
+    ) -> ContentGenerationResult | None:
+        if not self.provider.availability()["configured"]:
+            return None
+        if self._strategy(strategy) == "single_model":
+            result = await self.provider.generate_quick(**kwargs)
+            return self._with_orchestration(
+                result,
+                {
+                    "mode": "single_model",
+                    "requested_roles": [],
+                    "completed_roles": [],
+                    "failed_roles": [],
+                    "fanout_count": 0,
+                    "fan_in_status": "not_requested",
+                    "fallback_used": False,
+                    "call_count": 1,
+                },
+            )
+        return await self._multi_agent_generate(
+            role_method=self.provider.generate_quick,
+            synthesis_method=self.provider.generate_quick,
+            roles=_QUICK_AGENT_ROLES,
+            kwargs=kwargs,
+        )

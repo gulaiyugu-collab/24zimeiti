@@ -9,6 +9,7 @@ Desktop.ini
 **/__pycache__/
 **/*.py[cod]
 **/.venv/
+**/.venv-ocr/
 **/.pytest_cache/
 **/.mypy_cache/
 **/.ruff_cache/

@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 AnalysisStatus = Literal["completed", "needs_input", "partial", "unsupported"]
 AnalysisMode = Literal["quick", "full"]
+AnalysisStrategy = Literal["multi_agent", "single_model"]
 ProductRelevanceOverride = Literal["has_product", "no_product", "needs_confirmation"]
 PlatformStatus = Literal["active", "planned"]
 ASRMode = Literal["auto", "external", "local", "disabled"]
@@ -69,6 +70,7 @@ class AnalyzeRequest(BaseModel):
 
     url: str = Field(min_length=1, max_length=2048)
     analysis_mode: AnalysisMode = "full"
+    analysis_strategy: AnalysisStrategy = "multi_agent"
     transcript: str | None = Field(default=None, max_length=50_000)
     product_context: str | None = Field(default=None, max_length=10_000)
     product: ProductInput | None = None
@@ -94,6 +96,7 @@ class AcquisitionAnalysisRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     analysis_mode: AnalysisMode = "quick"
+    analysis_strategy: AnalysisStrategy = "multi_agent"
     product_context: str | None = Field(default=None, max_length=10_000)
     product: ProductInput | None = None
     product_relevance_override: ProductRelevanceOverride | None = None
@@ -167,3 +170,17 @@ class HealthResponse(BaseModel):
     service: str
     version: str
     paid_content_enabled: bool = False
+
+
+class DouyinBrowserExportRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    browser_id: str | None = Field(default=None, max_length=40)
+    profile_mode: Literal["existing", "temporary"] = "existing"
+    timeout_seconds: int = Field(default=180, ge=30, le=300)
+
+
+class DouyinDownloadImportRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    since_epoch_ms: int = Field(default=0, ge=0)

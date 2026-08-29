@@ -1,16 +1,21 @@
 from __future__ import annotations
 
+import base64
 import hashlib
 import importlib.util
 import json
+import os
+import re
 from copy import deepcopy
 from pathlib import Path
 from typing import Any, cast
+from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.datastructures import UploadFile as StarletteUploadFile
+from starlette.concurrency import run_in_threadpool
 
 from app import __version__
 from app.adapters import (
@@ -28,6 +33,8 @@ from app.models import (
     AnalysisResponse,
     AnalyzeRequest,
     DemoResponse,
+    DouyinBrowserExportRequest,
+    DouyinDownloadImportRequest,
     HealthResponse,
     PlatformInfo,
     PlatformsResponse,
@@ -42,10 +49,51 @@ from app.services import (
     ContentGenerationError,
     ContentGenerationResult,
     ContentGenerationRouter,
+    CreatorDataImport,
+    DouyinAccountCreate,
+    DouyinAccountNotFoundError,
+    DouyinAccountStorageError,
+    DouyinAccountStore,
+    DouyinAccountUpdate,
+    DouyinAccountValidationError,
+    DouyinCreatorBrowserError,
+    export_creator_data,
+    latest_creator_download,
+    list_browsers,
+    DouyinTopicCreate,
+    DouyinTopicNotFoundError,
+    DouyinTopicStorageError,
+    DouyinTopicStore,
+    DouyinTopicUpdate,
+    FullContentError,
+    PublishBackfillInput,
+    PublishCalibrationConflictError,
+    PublishCalibrationStorageError,
+    PublishCalibrationStore,
+    PublishCalibrationValidationError,
+    PublishExperimentCreate,
+    PublishExperimentNotFoundError,
+    PublishRecordInput,
+    PublishReviewInput,
+    LocalOCRProvider,
+    LocalOllamaVisionProvider,
+    UnavailableVisionProvider,
+    VisualAnalysisConfig,
+    VisualAnalysisError,
+    VisualAnalyzer,
+    OperationsAgent,
+    OperationsAgentConfirmationError,
+    OperationsAgentError,
+    OperationsAgentRequest,
+    OperationsAgentUnavailableError,
+    build_timeline,
     build_product_requirements,
     infer_product_relevance,
     is_optional_enhancement,
     merge_product_relevance,
+    ocr_items,
+    paginated_response,
+    read_verified_transcript,
 )
 
 
@@ -82,6 +130,10 @@ ALLOWED_MEDIA_TYPES = {
     "video/quicktime",
     "video/webm",
 }
+VISUAL_ARTIFACT_NAME_RE = re.compile(
+    r"^(?:visual_analysis\.json|visual_frame_[0-9]{2}_[0-9]{9}ms\.jpg)$"
+)
+MAX_VISUAL_MEDIA_BYTES = 512 * 1024 * 1024
 PLATFORMS = [
     PlatformInfo(
         id="douyin",
@@ -123,13 +175,160 @@ app = FastAPI(
     version=__version__,
     description="以可拍摄交付为前台、以证据与风险边界支持发布前审核的内容分析接口。",
 )
+
+
+@app.exception_handler(PublishExperimentNotFoundError)
+async def _publish_not_found_handler(
+    request: Request, exc: PublishExperimentNotFoundError
+) -> JSONResponse:
+    del request
+    return JSONResponse(status_code=404, content={"detail": str(exc)})
+
+
+@app.exception_handler(PublishCalibrationConflictError)
+async def _publish_conflict_handler(
+    request: Request, exc: PublishCalibrationConflictError
+) -> JSONResponse:
+    del request
+    return JSONResponse(status_code=409, content={"detail": str(exc)})
+
+
+@app.exception_handler(PublishCalibrationValidationError)
+async def _publish_validation_handler(
+    request: Request, exc: PublishCalibrationValidationError
+) -> JSONResponse:
+    del request
+    return JSONResponse(status_code=422, content={"detail": str(exc)})
+
+
+@app.exception_handler(PublishCalibrationStorageError)
+async def _publish_storage_handler(
+    request: Request, exc: PublishCalibrationStorageError
+) -> JSONResponse:
+    del request, exc
+    return JSONResponse(
+        status_code=503,
+        content={"detail": "发布实验存储暂时不可用，请稍后重试。"},
+    )
+
+
+@app.exception_handler(DouyinTopicNotFoundError)
+async def _douyin_topic_not_found_handler(
+    request: Request, exc: DouyinTopicNotFoundError
+) -> JSONResponse:
+    del request
+    return JSONResponse(status_code=404, content={"detail": str(exc)})
+
+
+@app.exception_handler(DouyinTopicStorageError)
+async def _douyin_topic_storage_handler(
+    request: Request, exc: DouyinTopicStorageError
+) -> JSONResponse:
+    del request, exc
+    return JSONResponse(
+        status_code=503,
+        content={"detail": "抖音选题存储暂时不可用，请稍后重试。"},
+    )
+
+
+@app.exception_handler(DouyinAccountNotFoundError)
+async def _douyin_account_not_found_handler(
+    request: Request, exc: DouyinAccountNotFoundError
+) -> JSONResponse:
+    del request
+    return JSONResponse(status_code=404, content={"detail": str(exc)})
+
+
+@app.exception_handler(DouyinAccountValidationError)
+async def _douyin_account_validation_handler(
+    request: Request, exc: DouyinAccountValidationError
+) -> JSONResponse:
+    del request
+    return JSONResponse(status_code=422, content={"detail": str(exc)})
+
+
+@app.exception_handler(DouyinAccountStorageError)
+async def _douyin_account_storage_handler(
+    request: Request, exc: DouyinAccountStorageError
+) -> JSONResponse:
+    del request, exc
+    return JSONResponse(
+        status_code=503,
+        content={"detail": "抖音账号与创作者中心数据暂时不可用，请稍后重试。"},
+    )
+
+
+@app.exception_handler(DouyinCreatorBrowserError)
+async def _douyin_creator_browser_handler(
+    request: Request, exc: DouyinCreatorBrowserError
+) -> JSONResponse:
+    del request
+    return JSONResponse(status_code=503, content={"detail": str(exc)})
+
+
+@app.exception_handler(OperationsAgentConfirmationError)
+async def _operations_agent_confirmation_handler(
+    request: Request, exc: OperationsAgentConfirmationError
+) -> JSONResponse:
+    del request
+    return JSONResponse(status_code=409, content={"detail": str(exc)})
+
+
+@app.exception_handler(OperationsAgentUnavailableError)
+async def _operations_agent_unavailable_handler(
+    request: Request, exc: OperationsAgentUnavailableError
+) -> JSONResponse:
+    del request
+    return JSONResponse(status_code=503, content={"detail": str(exc)})
+
+
+@app.exception_handler(OperationsAgentError)
+async def _operations_agent_error_handler(
+    request: Request, exc: OperationsAgentError
+) -> JSONResponse:
+    del request
+    return JSONResponse(status_code=502, content={"detail": str(exc)})
+
+
 douyin_adapter = DouyinAdapter()
 tiktok_adapter = TikTokAdapter()
 asr_router = ASRRouter()
 content_router = ContentGenerationRouter()
+operations_agent = OperationsAgent()
 acquisition_jobs = AcquisitionJobManager()
+publish_calibration = PublishCalibrationStore()
+douyin_topics = DouyinTopicStore()
+douyin_accounts = DouyinAccountStore()
+APP_ROOT = Path(__file__).resolve().parent.parent
+configured_ocr_python = os.environ.get("PROJECT024_OCR_PYTHON", "").strip()
+ocr_python = (
+    Path(configured_ocr_python).expanduser().resolve()
+    if configured_ocr_python
+    else APP_ROOT / ".venv-ocr" / "Scripts" / "python.exe"
+)
+vision_enabled = os.environ.get("PROJECT024_VISION_ENABLED", "1").strip().lower() not in {
+    "0",
+    "false",
+    "no",
+    "off",
+}
+vision_provider = (
+    LocalOllamaVisionProvider(
+        base_url=os.environ.get(
+            "PROJECT024_VISION_BASE_URL", "http://127.0.0.1:11435"
+        ).strip(),
+        model=os.environ.get("PROJECT024_VISION_MODEL", "qwen2.5vl:3b").strip(),
+    )
+    if vision_enabled
+    else UnavailableVisionProvider()
+)
+visual_analyzer = VisualAnalyzer(
+    ocr_provider=LocalOCRProvider(python_executable=ocr_python),
+    vision_provider=vision_provider,
+    config=VisualAnalysisConfig(total_timeout_seconds=180),
+)
 
-STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
+STATIC_DIR = APP_ROOT / "static"
 if STATIC_DIR.is_dir():
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
@@ -1169,6 +1368,321 @@ def _acquisition_analysis_material(
     return status, manifest, item, {**transcript_artifact, "sha256": transcript_sha256}
 
 
+def _visual_unavailable(reason_code: str, message: str) -> dict[str, Any]:
+    return {
+        "schema_version": "1.0",
+        "status": "unavailable",
+        "message": message,
+        "probe": {},
+        "scene_structure": {
+            "status": "unavailable",
+            "reason_code": reason_code,
+        },
+        "frames": [],
+        "ocr": {
+            "status": "unavailable",
+            "provider": None,
+            "reason_code": "engine_not_installed",
+            "message": "本机未安装本地 OCR 引擎，未生成画面文字。",
+        },
+        "vision": {
+            "status": "unavailable",
+            "provider": None,
+            "reason_code": "visual_analysis_unavailable",
+            "message": "当前没有可供本地视觉模型分析的已验证代表帧。",
+            "observations": [],
+            "possible_inferences": [],
+            "limitations": [],
+        },
+    }
+
+
+def _sha256_path(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _public_visual_analysis(result: dict[str, Any]) -> dict[str, Any]:
+    probe = result.get("probe") if isinstance(result.get("probe"), dict) else {}
+    scene = (
+        result.get("scene_structure")
+        if isinstance(result.get("scene_structure"), dict)
+        else {}
+    )
+    ocr = result.get("ocr") if isinstance(result.get("ocr"), dict) else {}
+    vision = result.get("vision") if isinstance(result.get("vision"), dict) else {}
+    frames: list[dict[str, Any]] = []
+    raw_frames = result.get("frames")
+    for frame in raw_frames if isinstance(raw_frames, list) else []:
+        if not isinstance(frame, dict):
+            continue
+        artifact_url = str(frame.get("artifact_url") or "")
+        if not artifact_url.startswith("/api/acquisition/jobs/"):
+            continue
+        frames.append(
+            {
+                "frame_id": frame.get("frame_id") or frame.get("artifact_name"),
+                "timestamp_seconds": frame.get("timestamp_seconds"),
+                "reason": frame.get("reason"),
+                "scene_score": frame.get("scene_score"),
+                "artifact_url": artifact_url,
+            }
+        )
+    raw_cuts = scene.get("cuts")
+    cuts = [
+        {
+            "timestamp_seconds": item.get("timestamp_seconds"),
+            "score": item.get("score"),
+        }
+        for item in (raw_cuts if isinstance(raw_cuts, list) else [])[:120]
+        if isinstance(item, dict)
+    ]
+    scene_status = str(scene.get("status") or "unavailable")
+    ocr_status = str(ocr.get("status") or "unavailable")
+    ocr_blocks: list[dict[str, Any]] = []
+    raw_blocks = ocr.get("blocks")
+    for block in (raw_blocks if isinstance(raw_blocks, list) else [])[:500]:
+        if not isinstance(block, dict):
+            continue
+        frame_refs = [
+            {
+                key: reference.get(key)
+                for key in ("frame_id", "timestamp_seconds", "box", "confidence")
+                if reference.get(key) is not None
+            }
+            for reference in (
+                block.get("frame_refs")
+                if isinstance(block.get("frame_refs"), list)
+                else []
+            )[:100]
+            if isinstance(reference, dict)
+        ]
+        ocr_blocks.append(
+            {
+                key: block.get(key)
+                for key in (
+                    "frame_id",
+                    "last_frame_id",
+                    "timestamp_seconds",
+                    "first_seen_seconds",
+                    "last_seen_seconds",
+                    "text",
+                    "box",
+                    "confidence",
+                    "provider",
+                    "model_version",
+                )
+                if block.get(key) is not None
+            }
+            | {"frame_refs": frame_refs}
+        )
+    frame_urls = {
+        str(frame.get("frame_id") or ""): str(frame.get("artifact_url") or "")
+        for frame in frames
+    }
+
+    def public_vision_items(key: str, evidence_state: str) -> list[dict[str, Any]]:
+        raw_items = vision.get(key)
+        public_items: list[dict[str, Any]] = []
+        for item in (raw_items if isinstance(raw_items, list) else [])[:100]:
+            if not isinstance(item, dict):
+                continue
+            frame_id = str(item.get("frame_id") or "")
+            artifact_url = frame_urls.get(frame_id, "")
+            description = str(item.get("description") or "").strip()
+            if not artifact_url.startswith("/api/acquisition/jobs/") or not description:
+                continue
+            public_items.append(
+                {
+                    key_name: item.get(key_name)
+                    for key_name in (
+                        "frame_id",
+                        "timestamp_seconds",
+                        "category",
+                        "description",
+                        "confidence",
+                        "provider",
+                        "model_version",
+                        "evidence_type",
+                    )
+                    if item.get(key_name) is not None
+                }
+                | {"evidence_state": evidence_state, "artifact_url": artifact_url}
+            )
+        return public_items
+
+    vision_observations = public_vision_items("observations", "observed")
+    vision_inferences = public_vision_items("possible_inferences", "inferred")
+    vision_status = str(vision.get("status") or "unavailable")
+    if (
+        scene_status == "completed"
+        and ocr_status == "completed"
+        and vision_status == "completed"
+    ):
+        message = "已在本机完成代表帧、候选镜头切点、画面文字与精选帧语义分析。"
+    elif scene_status == "completed" and ocr_status == "completed":
+        message = "已在本机完成代表帧、候选镜头切点和画面文字识别；画面语义当前不可用。"
+    elif scene_status == "completed":
+        message = (
+            "已在本机完成代表帧提取与候选镜头切点估算；"
+            "镜头节奏是机器启发式结果，OCR 当前不可用。"
+        )
+    else:
+        message = str(result.get("message") or "画面结构分析暂不可用。")
+    return {
+        "schema_version": str(result.get("schema_version") or "1.0"),
+        "status": str(result.get("status") or "unavailable"),
+        "message": message,
+        "probe": {
+            key: probe.get(key)
+            for key in (
+                "duration_seconds",
+                "coverage_seconds",
+                "truncated",
+                "width",
+                "height",
+                "fps",
+            )
+            if probe.get(key) is not None
+        },
+        "scene_structure": {
+            key: scene.get(key)
+            for key in (
+                "status",
+                "method",
+                "candidate_cut_count",
+                "estimated_segment_count",
+                "estimated_average_segment_seconds",
+                "cuts_per_minute",
+                "pace",
+                "pace_is_heuristic",
+                "cuts_truncated",
+                "reason_code",
+            )
+            if scene.get(key) is not None
+        }
+        | {"cuts": cuts},
+        "frames": frames,
+        "frame_count": len(frames),
+        "ocr": {
+            key: ocr.get(key)
+            for key in (
+                "status",
+                "provider",
+                "model_version",
+                "reason_code",
+                "message",
+                "frame_count",
+                "block_count",
+                "limitations",
+            )
+            if ocr.get(key) is not None
+        }
+        | {"blocks": ocr_blocks},
+        "vision": {
+            key: vision.get(key)
+            for key in (
+                "status",
+                "provider",
+                "model_version",
+                "reason_code",
+                "message",
+                "frame_count",
+                "successful_frame_count",
+                "observation_count",
+                "inference_count",
+                "limitations",
+            )
+            if vision.get(key) is not None
+        }
+        | {
+            "observations": vision_observations,
+            "possible_inferences": vision_inferences,
+        },
+        "cache_hit": result.get("cache_hit") is True,
+    }
+
+
+def _visual_analysis_for_job(
+    job_id: str,
+    manifest: dict[str, Any],
+    *,
+    public: bool = True,
+) -> dict[str, Any]:
+    artifacts = manifest.get("raw_artifacts")
+    source_media = next(
+        (
+            item
+            for item in artifacts
+            if isinstance(item, dict)
+            and item.get("role") == "source_media"
+            and str(item.get("content_type") or "").startswith("video/")
+        ),
+        None,
+    ) if isinstance(artifacts, list) else None
+    if not isinstance(source_media, dict):
+        return _visual_unavailable(
+            "source_media_missing",
+            "当前任务没有已登记的视频媒体，未执行抽帧或镜头结构估算。",
+        )
+    artifact_name = str(source_media.get("name") or "")
+    expected_sha256 = str(source_media.get("sha256") or "").lower()
+    try:
+        declared_size = int(source_media.get("size_bytes") or 0)
+    except (TypeError, ValueError):
+        return _visual_unavailable(
+            "source_size_invalid",
+            "来源视频缺少有效大小记录，未执行画面分析。",
+        )
+    if declared_size > MAX_VISUAL_MEDIA_BYTES:
+        return _visual_unavailable(
+            "source_media_too_large",
+            "来源视频超过 512 MiB 的本机画面分析上限。",
+        )
+    if not re.fullmatch(r"[a-f0-9]{64}", expected_sha256):
+        return _visual_unavailable(
+            "source_hash_missing",
+            "来源视频缺少有效校验值，未执行画面分析。",
+        )
+    try:
+        media_path = acquisition_jobs.store.artifact_path(job_id, artifact_name)
+        actual_size = media_path.stat().st_size
+        if actual_size <= 0:
+            raise VisualAnalysisError("来源视频为空，未执行画面分析。")
+        if actual_size > MAX_VISUAL_MEDIA_BYTES:
+            raise VisualAnalysisError(
+                "来源视频超过 512 MiB 的本机画面分析上限。"
+            )
+        if _sha256_path(media_path) != expected_sha256:
+            raise VisualAnalysisError("来源视频校验失败，未执行画面分析。")
+        result = visual_analyzer.analyze(
+            media_path,
+            expected_sha256,
+            acquisition_jobs.store.job_dir(job_id) / "visual_analysis",
+            artifact_url_builder=lambda name: (
+                f"/api/acquisition/jobs/{job_id}/visual-analysis/artifacts/{name}"
+            ),
+        )
+    except (AcquisitionJobNotFoundError, OSError, ValueError, VisualAnalysisError) as exc:
+        return _visual_unavailable("visual_analysis_failed", str(exc))
+    return _public_visual_analysis(result) if public else result
+
+
+def _visual_artifact_path(job_id: str, artifact_name: str) -> Path:
+    if not VISUAL_ARTIFACT_NAME_RE.fullmatch(artifact_name):
+        raise AcquisitionJobNotFoundError(artifact_name)
+    output_dir = (
+        acquisition_jobs.store.job_dir(job_id) / "visual_analysis"
+    ).resolve()
+    path = (output_dir / artifact_name).resolve()
+    if path.parent != output_dir or not path.is_file() or path.stat().st_size <= 0:
+        raise AcquisitionJobNotFoundError(artifact_name)
+    return path
+
+
 def _attach_acquisition_context(
     response: AnalysisResponse,
     *,
@@ -1176,7 +1690,9 @@ def _attach_acquisition_context(
     manifest: dict[str, Any],
     item: dict[str, Any],
     transcript_artifact: dict[str, Any],
+    visual_analysis: dict[str, Any] | None = None,
 ) -> AnalysisResponse:
+    visual_analysis = visual_analysis if isinstance(visual_analysis, dict) else None
     raw_artifacts = manifest.get("raw_artifacts")
     source_artifact = next(
         (
@@ -1219,6 +1735,8 @@ def _attach_acquisition_context(
         response.diagnostics["acquisition"] = acquisition_context
         if response.report is not None:
             response.report["source"] = response.source
+            if visual_analysis is not None:
+                response.report["visual_analysis"] = visual_analysis
         response.message = "登记样本采集任务已进入内容分析。" + response.message
         return response
 
@@ -1231,6 +1749,30 @@ def _attach_acquisition_context(
     transcript_text = str(transcript.get("text") or "").strip()
     manifest_missing = manifest.get("evidence_summary", {}).get("missing", [])
     manifest_missing = manifest_missing if isinstance(manifest_missing, list) else []
+    scene_ready = (
+        isinstance(visual_analysis, dict)
+        and isinstance(visual_analysis.get("scene_structure"), dict)
+        and visual_analysis["scene_structure"].get("status") == "completed"
+    )
+    ocr_ready = (
+        isinstance(visual_analysis, dict)
+        and isinstance(visual_analysis.get("ocr"), dict)
+        and visual_analysis["ocr"].get("status") == "completed"
+    )
+    if scene_ready:
+        if ocr_ready:
+            manifest_missing = [
+                missing
+                for missing in manifest_missing
+                if "ocr" not in str(missing).lower() and "镜头结构" not in str(missing)
+            ]
+        else:
+            manifest_missing = [
+                "画面文字 OCR（本机未安装 OCR 引擎）"
+                if "ocr" in str(missing).lower() or "镜头结构" in str(missing)
+                else missing
+                for missing in manifest_missing
+            ]
     metrics = item.get("metrics") if isinstance(item.get("metrics"), dict) else {}
     analysis_missing = list(response.missing)
     if any(value is not None for value in metrics.values()):
@@ -1245,6 +1787,22 @@ def _attach_acquisition_context(
         },
         manifest_missing,
     )
+    if scene_ready:
+        optional_enhancements = list(
+            dict.fromkeys(
+                str(item)
+                for item in optional_enhancements
+                if not ocr_ready
+                or ("ocr" not in str(item).lower() and "镜头结构" not in str(item))
+            )
+        )
+        if not ocr_ready:
+            optional_enhancements = [
+                "画面文字 OCR（本机未安装 OCR 引擎）"
+                if "ocr" in str(item).lower() or "镜头结构" in str(item)
+                else str(item)
+                for item in optional_enhancements
+            ]
     hard_manifest_missing = [
         str(item)
         for item in manifest_missing
@@ -1293,6 +1851,38 @@ def _attach_acquisition_context(
             "sha256": transcript_artifact["sha256"],
         }
     )
+    if scene_ready and isinstance(visual_analysis, dict):
+        scene = visual_analysis["scene_structure"]
+        probe = visual_analysis.get("probe", {})
+        source["evidence"].append(
+            {
+                "type": "frame_and_shot_structure",
+                "label": "本机抽帧与镜头结构估算",
+                "value": {
+                    "frame_count": visual_analysis.get("frame_count"),
+                    "candidate_cut_count": scene.get("candidate_cut_count"),
+                    "coverage_seconds": probe.get("coverage_seconds"),
+                    "truncated": probe.get("truncated"),
+                    "pace": scene.get("pace"),
+                },
+                "confidence": "runtime_generated_heuristic",
+            }
+        )
+        if ocr_ready:
+            ocr_evidence = visual_analysis.get("ocr", {})
+            source["evidence"].append(
+                {
+                    "type": "on_screen_text_ocr",
+                    "label": "本机画面文字识别",
+                    "value": {
+                        "frame_count": ocr_evidence.get("frame_count"),
+                        "block_count": ocr_evidence.get("block_count"),
+                        "provider": ocr_evidence.get("provider"),
+                        "model_version": ocr_evidence.get("model_version"),
+                    },
+                    "confidence": "runtime_generated_with_per_block_scores",
+                }
+            )
     source["missing"] = combined_missing
     response.missing = combined_missing
     response.message = "采集任务已自动进入内容分析。" + response.message
@@ -1301,6 +1891,8 @@ def _attach_acquisition_context(
     if report is None:
         return response
     report["source"] = source
+    if visual_analysis is not None:
+        report["visual_analysis"] = visual_analysis
     existing_requirements = report.get("requirements", {})
     existing_relevance = report.get("product_relevance")
     if not isinstance(existing_relevance, dict):
@@ -1310,15 +1902,34 @@ def _attach_acquisition_context(
         existing_product_requirements = build_product_requirements(
             relevance=existing_relevance
         )
+    existing_optional = (
+        list(existing_requirements.get("optional_enhancements", []))
+        if isinstance(existing_requirements, dict)
+        else []
+    )
+    if scene_ready:
+        if ocr_ready:
+            existing_optional = [
+                item
+                for item in existing_optional
+                if "ocr" not in str(item).lower() and "镜头结构" not in str(item)
+            ]
+        else:
+            existing_optional = [
+                "画面文字 OCR（本机未安装 OCR 引擎）"
+                if "ocr" in str(item).lower() or "镜头结构" in str(item)
+                else str(item)
+                for item in existing_optional
+            ]
     _sync_requirement_fields(
         report,
         product_relevance=existing_relevance,
         product_requirements=existing_product_requirements,
         blocking=combined_missing,
         optional=[
-            *existing_requirements.get("optional_enhancements", []),
+            *existing_optional,
             *optional_enhancements,
-        ] if isinstance(existing_requirements, dict) else optional_enhancements,
+        ],
         distillation_complete=bool(report.get("distillation") or report.get("quick_result")),
     )
     evidence_and_risk = report.get("evidence_and_risk")
@@ -1367,6 +1978,33 @@ def _attach_acquisition_context(
             )
         )
     return response
+
+
+def _verified_full_transcript(
+    job_id: str,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    _, manifest, _, transcript_artifact = _acquisition_analysis_material(job_id)
+    if not transcript_artifact or transcript_artifact.get("name") != "transcript.json":
+        raise HTTPException(
+            status_code=422,
+            detail="当前任务没有已登记的完整口播文件。",
+        )
+    try:
+        path = acquisition_jobs.store.artifact_path(job_id, "transcript.json")
+        record = acquisition_jobs.store.artifact_record(job_id, "transcript.json")
+        expected_size = int(
+            transcript_artifact.get("size_bytes") or record.get("size_bytes") or 0
+        )
+        transcript = read_verified_transcript(
+            path,
+            expected_sha256=str(transcript_artifact["sha256"]),
+            expected_size_bytes=expected_size,
+        )
+    except AcquisitionJobNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="完整口播文件不存在。") from exc
+    except (TypeError, ValueError, FullContentError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return manifest, transcript
 
 
 @app.post(
@@ -1418,6 +2056,141 @@ def acquisition_job_artifact(job_id: str, artifact_name: str) -> FileResponse:
         path,
         media_type=str(record.get("content_type") or "application/octet-stream"),
         filename=artifact_name,
+    )
+
+
+@app.post("/api/acquisition/jobs/{job_id}/visual-analysis")
+def analyze_acquisition_visuals(job_id: str) -> dict[str, Any]:
+    """对已登记来源视频做本机抽帧与候选镜头结构估算。"""
+    try:
+        status = acquisition_jobs.store.status(job_id)
+        manifest = acquisition_jobs.store.manifest(job_id)
+    except AcquisitionJobNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="采集任务不存在或尚无清单。") from exc
+    if status.get("status") != "completed" or manifest.get("status") != "completed":
+        raise HTTPException(status_code=409, detail="采集任务尚未完成，不能分析画面。")
+    return _visual_analysis_for_job(job_id, manifest)
+
+
+@app.get(
+    "/api/acquisition/jobs/{job_id}/visual-analysis/artifacts/{artifact_name}",
+    response_model=None,
+)
+def acquisition_visual_artifact(job_id: str, artifact_name: str) -> FileResponse:
+    try:
+        path = _visual_artifact_path(job_id, artifact_name)
+    except AcquisitionJobNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="画面分析文件不存在。") from exc
+    media_type = "application/json" if path.suffix.lower() == ".json" else "image/jpeg"
+    return FileResponse(path, media_type=media_type)
+
+
+@app.get("/api/acquisition/jobs/{job_id}/full-content/transcript")
+def acquisition_full_transcript(
+    job_id: str,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=100),
+) -> dict[str, Any]:
+    _, transcript = _verified_full_transcript(job_id)
+    return paginated_response(
+        "transcript",
+        transcript["segments"],
+        offset=offset,
+        limit=limit,
+        metadata={
+            key: transcript.get(key)
+            for key in (
+                "character_count",
+                "segment_count",
+                "source",
+                "provider",
+                "model",
+                "language",
+            )
+            if transcript.get(key) is not None
+        },
+    )
+
+
+@app.get("/api/acquisition/jobs/{job_id}/full-content/transcript-text")
+def acquisition_full_transcript_text(job_id: str) -> dict[str, Any]:
+    _, transcript = _verified_full_transcript(job_id)
+    return {
+        "schema_version": "project024-full-content/v1",
+        "section": "transcript_text",
+        "status": "completed",
+        "character_count": transcript["character_count"],
+        "segment_count": transcript["segment_count"],
+        "text": transcript["text"],
+    }
+
+
+@app.get("/api/acquisition/jobs/{job_id}/full-content/ocr")
+def acquisition_full_ocr(
+    job_id: str,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=100),
+) -> dict[str, Any]:
+    manifest, _ = _verified_full_transcript(job_id)
+    visual = _visual_analysis_for_job(job_id, manifest, public=False)
+    items = ocr_items(visual)
+    ocr = visual.get("ocr") if isinstance(visual.get("ocr"), dict) else {}
+    status = str(ocr.get("status") or "unavailable")
+    if status != "completed":
+        return {
+            "schema_version": "project024-full-content/v1",
+            "section": "ocr",
+            "status": status,
+            "message": str(ocr.get("message") or "当前没有可用的画面文字。"),
+            "offset": 0,
+            "limit": limit,
+            "total_items": 0,
+            "has_more": False,
+            "items": [],
+        }
+    return paginated_response(
+        "ocr",
+        items,
+        offset=offset,
+        limit=limit,
+        metadata={
+            "frame_count": ocr.get("frame_count"),
+            "provider": ocr.get("provider"),
+            "model_version": ocr.get("model_version"),
+            "limitations": ocr.get("limitations", []),
+        },
+    )
+
+
+@app.get("/api/acquisition/jobs/{job_id}/full-content/timeline")
+def acquisition_full_timeline(
+    job_id: str,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=100),
+) -> dict[str, Any]:
+    manifest, transcript = _verified_full_transcript(job_id)
+    visual = _visual_analysis_for_job(job_id, manifest, public=False)
+    items = build_timeline(transcript, visual)
+    vision = visual.get("vision") if isinstance(visual.get("vision"), dict) else {}
+    return paginated_response(
+        "timeline",
+        items,
+        offset=offset,
+        limit=limit,
+        metadata={
+            "transcript_character_count": transcript["character_count"],
+            "transcript_segment_count": transcript["segment_count"],
+            "ocr_status": (
+                visual.get("ocr", {}).get("status")
+                if isinstance(visual.get("ocr"), dict)
+                else "unavailable"
+            ),
+            "vision_status": str(vision.get("status") or "unavailable"),
+            "vision_message": str(
+                vision.get("message")
+                or "多模态画面语义尚未接入；时间线不会用字幕推测画面。"
+            ),
+        },
     )
 
 
@@ -1642,8 +2415,11 @@ def demo() -> DemoResponse:
     return DemoResponse(sample_input={"url": url}, result=_completed_response(case))
 
 
-@app.post("/api/analyze", response_model=AnalysisResponse)
-async def analyze(payload: AnalyzeRequest) -> AnalysisResponse:
+async def _analyze(
+    payload: AnalyzeRequest,
+    *,
+    visual_evidence: dict[str, Any] | None = None,
+) -> AnalysisResponse:
     platform = detect_platform(payload.url)
     if PLATFORM_STATUS.get(platform) != "active":
         return _unsupported_response(payload.url, platform)
@@ -1664,10 +2440,18 @@ async def analyze(payload: AnalyzeRequest) -> AnalysisResponse:
     if response.report is None:
         return response
 
-    response.diagnostics["generation"] = content_router.plan()
+    try:
+        generation_plan = content_router.plan(payload.analysis_strategy)
+    except TypeError as exc:
+        # Keep compatibility with the small no-paid test/router adapters.
+        if "positional" not in str(exc) and "argument" not in str(exc):
+            raise
+        generation_plan = content_router.plan()
+    response.diagnostics["generation"] = generation_plan
     if payload.analysis_mode == "quick":
         try:
             generated = await content_router.generate_quick(
+                strategy=payload.analysis_strategy,
                 platform=platform,
                 transcript=payload.transcript or "",
                 product_context=payload.product_context,
@@ -1677,6 +2461,7 @@ async def analyze(payload: AnalyzeRequest) -> AnalysisResponse:
                     else None
                 ),
                 product_relevance=response.report.get("product_relevance"),
+                visual_evidence=visual_evidence,
             )
         except ContentGenerationError as exc:
             response.diagnostics["generation"] = {
@@ -1692,6 +2477,7 @@ async def analyze(payload: AnalyzeRequest) -> AnalysisResponse:
 
     try:
         generated = await content_router.generate(
+            strategy=payload.analysis_strategy,
             platform=platform,
             transcript=payload.transcript or "",
             product_context=payload.product_context,
@@ -1701,6 +2487,7 @@ async def analyze(payload: AnalyzeRequest) -> AnalysisResponse:
                 else None
             ),
             product_relevance=response.report.get("product_relevance"),
+            visual_evidence=visual_evidence,
         )
     except ContentGenerationError as exc:
         response.diagnostics["generation"] = {
@@ -1715,6 +2502,11 @@ async def analyze(payload: AnalyzeRequest) -> AnalysisResponse:
     return _apply_generated_research_draft(response, generated)
 
 
+@app.post("/api/analyze", response_model=AnalysisResponse)
+async def analyze(payload: AnalyzeRequest) -> AnalysisResponse:
+    return await _analyze(payload)
+
+
 @app.post(
     "/api/acquisition/jobs/{job_id}/analyze",
     response_model=AnalysisResponse,
@@ -1726,6 +2518,11 @@ async def analyze_acquisition_job(
     status, manifest, item, transcript_artifact = _acquisition_analysis_material(
         job_id
     )
+    visual_analysis = await run_in_threadpool(
+        _visual_analysis_for_job,
+        job_id,
+        manifest,
+    )
     transcript = (
         item.get("content", {}).get("transcript")
         if manifest.get("acquisition_mode") != "registered_fixture"
@@ -1734,20 +2531,264 @@ async def analyze_acquisition_job(
     analysis_payload = AnalyzeRequest(
         url=str(manifest["canonical_url"]),
         analysis_mode=payload.analysis_mode,
+        analysis_strategy=payload.analysis_strategy,
         transcript=str(transcript["text"]) if isinstance(transcript, dict) else None,
         product_context=payload.product_context,
         product=payload.product,
         product_relevance_override=payload.product_relevance_override,
         market=payload.market,
     )
-    response = await analyze(analysis_payload)
+    response = await _analyze(
+        analysis_payload,
+        visual_evidence=visual_analysis,
+    )
     return _attach_acquisition_context(
         response,
         status=status,
         manifest=manifest,
         item=item,
         transcript_artifact=transcript_artifact,
+        visual_analysis=visual_analysis,
     )
+
+
+@app.post("/api/publish/experiments", status_code=201)
+def create_publish_experiment(payload: PublishExperimentCreate) -> dict[str, Any]:
+    """登记一次即将发布的内容，并写下盲预测（7 维打分 + 指标区间）。"""
+    return publish_calibration.create(payload)
+
+
+@app.get("/api/agent/status")
+def operations_agent_status() -> JSONResponse:
+    return JSONResponse(operations_agent.plan())
+
+
+@app.post("/api/agent/chat")
+async def operations_agent_chat(payload: OperationsAgentRequest) -> JSONResponse:
+    """根据当前页面草稿进行一次可继续迭代的脚本或运营策略对话。"""
+    return JSONResponse(await operations_agent.chat(payload))
+
+
+@app.get("/api/douyin/accounts/connection")
+def douyin_account_connection() -> JSONResponse:
+    """报告文件导入、本机浏览器导出和官方 OAuth 边界。"""
+    return JSONResponse(
+        {
+            "recommended_path": {
+                "key": "creator_export",
+                "available": True,
+                "label": "创作者中心文件导入",
+                "reason": "用户在创作者中心导出 CSV/XLSX 后上传即可；不需要本项目接管登录态。",
+            },
+            "official_oauth": {
+                "status": "requires_platform_setup",
+                "available": False,
+                "reason": "当前仅作为筹备路径：官方入驻文档将网站/移动应用列在企业身份范围，个人主体仅支持小游戏和小玩法；还需要应用上线、数据权限审核、HTTPS 回调、真实授权和 token 生命周期验收。平台页面若有更新，以当前后台可选主体和审核结果为准。",
+                "application_guide": "https://developer.open-douyin.com/docs/resource/zh-CN/dop/develop/app-mgmt/create-mobile-and-web-app",
+                "authorization_guide": "https://developer.open-douyin.com/docs/resource/zh-CN/dop/develop/openapi/account-permission/douyin-get-permission-code",
+                "openapi_catalog": "https://developer.open-douyin.com/docs/resource/zh-CN/dop/develop/openapi/list",
+            },
+            "creator_export": {
+                "status": "available",
+                "available": True,
+                "reason": "可导入创作者中心导出的 CSV；不需要账号密码或 Cookie。",
+            },
+            "local_browser_export": {
+                "status": "available",
+                "available": True,
+                "reason": "用户主动点击后，在本机可见浏览器会话中完成导出；仅把导出文件导入项目，不保存 Cookie 或浏览器 profile。",
+            },
+            "security": {
+                "stores_password": False,
+                "stores_cookie": False,
+                "stores_browser_session": False,
+            },
+        }
+    )
+
+
+@app.get("/api/douyin/browser-capabilities")
+def douyin_browser_capabilities() -> JSONResponse:
+    """返回本机可发现的浏览器；不会读取 Cookie 或返回登录信息。"""
+    return JSONResponse({"browsers": list_browsers()})
+
+
+@app.post("/api/douyin/accounts", status_code=201)
+def create_douyin_account(payload: DouyinAccountCreate) -> dict[str, Any]:
+    return douyin_accounts.create(payload)
+
+
+@app.get("/api/douyin/accounts")
+def list_douyin_accounts() -> JSONResponse:
+    return JSONResponse({"accounts": douyin_accounts.list_all()})
+
+
+@app.get("/api/douyin/accounts/{account_id}")
+def get_douyin_account(account_id: str) -> JSONResponse:
+    return JSONResponse(douyin_accounts.get(account_id))
+
+
+@app.patch("/api/douyin/accounts/{account_id}")
+def update_douyin_account(
+    account_id: str, payload: DouyinAccountUpdate
+) -> JSONResponse:
+    return JSONResponse(douyin_accounts.update(account_id, payload))
+
+
+@app.post("/api/douyin/accounts/{account_id}/imports", status_code=201)
+def import_douyin_creator_data(
+    account_id: str, payload: CreatorDataImport
+) -> dict[str, Any]:
+    return douyin_accounts.import_creator_data(account_id, payload)
+
+
+@app.post("/api/douyin/accounts/{account_id}/browser-import", status_code=201)
+async def import_douyin_creator_data_from_browser(
+    account_id: str, payload: DouyinBrowserExportRequest
+) -> JSONResponse:
+    """在本机浏览器会话中导出创作者中心数据，并立即导入标准化指标。"""
+    browser_payload, data, filename = await run_in_threadpool(
+        export_creator_data,
+        browser_id=payload.browser_id,
+        profile_mode=payload.profile_mode,
+        timeout_seconds=payload.timeout_seconds,
+    )
+    imported = douyin_accounts.import_creator_data(
+        account_id,
+        CreatorDataImport(
+            filename=filename,
+            file_base64=base64.b64encode(data).decode("ascii"),
+        ),
+    )
+    return JSONResponse(
+        {
+            "browser": browser_payload.get("browser"),
+            "browser_label": browser_payload.get("browser_label"),
+            "profile_mode": browser_payload.get("profile_mode"),
+            "bytes": browser_payload.get("bytes"),
+            "temporary_profile_deleted": browser_payload.get("temporary_profile_deleted", False),
+            "import": imported,
+            "message": "已从本机浏览器导入创作者中心数据；Cookie 未写入项目或数据库。",
+        }
+    )
+
+
+@app.post("/api/douyin/accounts/{account_id}/download-import", status_code=201)
+def import_latest_douyin_download(
+    account_id: str, payload: DouyinDownloadImportRequest
+) -> JSONResponse:
+    """识别下载文件夹里用户刚下载的 CSV/XLSX 并导入，不读取 Cookie。"""
+    result = latest_creator_download(since_epoch_ms=payload.since_epoch_ms)
+    if result is None:
+        raise HTTPException(status_code=404, detail="尚未发现新的 CSV/XLSX 下载文件。")
+    data, filename, modified_ms = result
+    imported = douyin_accounts.import_creator_data(
+        account_id,
+        CreatorDataImport(
+            filename=filename,
+            file_base64=base64.b64encode(data).decode("ascii"),
+        ),
+    )
+    return JSONResponse(
+        {
+            "filename": filename,
+            "modified_epoch_ms": modified_ms,
+            "bytes": len(data),
+            "import": imported,
+            "message": f"已识别下载文件“{filename}”并导入账号分析。",
+        }
+    )
+
+
+@app.get("/api/douyin/accounts/{account_id}/imports")
+def list_douyin_creator_imports(account_id: str) -> JSONResponse:
+    return JSONResponse({"imports": douyin_accounts.list_imports(account_id)})
+
+
+@app.get("/api/douyin/accounts/{account_id}/analysis")
+def douyin_account_analysis(account_id: str) -> JSONResponse:
+    return JSONResponse(douyin_accounts.analysis(account_id))
+
+
+@app.post("/api/douyin/topics", status_code=201)
+def create_douyin_topic(payload: DouyinTopicCreate) -> dict[str, Any]:
+    """把抖音分析结果保存为可继续运营的选题。"""
+    return douyin_topics.create(payload)
+
+
+@app.get("/api/douyin/topics")
+def list_douyin_topics(
+    status: Literal["idea", "draft", "ready"] | None = Query(default=None),
+) -> JSONResponse:
+    """列出抖音选题；新记录在前，可按状态筛选。"""
+    return JSONResponse({"topics": douyin_topics.list_all(status=status)})
+
+
+@app.get("/api/douyin/topics/{topic_id}")
+def get_douyin_topic(topic_id: str) -> JSONResponse:
+    return JSONResponse(douyin_topics.get(topic_id))
+
+
+@app.patch("/api/douyin/topics/{topic_id}")
+def update_douyin_topic(
+    topic_id: str, payload: DouyinTopicUpdate
+) -> JSONResponse:
+    """更新抖音选题状态、脚本摘要或实验假设。"""
+    return JSONResponse(douyin_topics.update(topic_id, payload))
+
+
+@app.get("/api/publish/experiments")
+def list_publish_experiments() -> JSONResponse:
+    """列出全部发布实验，新记录在前，便于复盘与累积。"""
+    return JSONResponse({"experiments": publish_calibration.list_all()})
+
+
+@app.get("/api/publish/calibration-summary")
+def publish_calibration_summary() -> JSONResponse:
+    """汇总已复盘实验；样本不足时明确标记证据不足。"""
+    return JSONResponse(publish_calibration.calibration_summary())
+
+
+@app.get("/api/publish/experiments/{experiment_id}/events")
+def list_publish_experiment_events(experiment_id: str) -> JSONResponse:
+    """返回单个实验的不可变事件历史。"""
+    publish_calibration.get(experiment_id)
+    return JSONResponse(
+        {"events": publish_calibration.list_events(experiment_id=experiment_id)}
+    )
+
+
+@app.get("/api/publish/experiments/{experiment_id}")
+def get_publish_experiment(experiment_id: str) -> JSONResponse:
+    record = publish_calibration.get(experiment_id)
+    return JSONResponse(record)
+
+
+@app.post("/api/publish/experiments/{experiment_id}/publish")
+def publish_experiment(
+    experiment_id: str, payload: PublishRecordInput
+) -> JSONResponse:
+    """登记发布动作（平台/日期/链接），进入已发布状态。"""
+    record = publish_calibration.publish(experiment_id, payload)
+    return JSONResponse(record)
+
+
+@app.post("/api/publish/experiments/{experiment_id}/backfill")
+def backfill_experiment(
+    experiment_id: str, payload: PublishBackfillInput
+) -> JSONResponse:
+    """发布后回填实测指标（曝光/点击/留存/互动/涨粉），进入已测量状态。"""
+    record = publish_calibration.backfill(experiment_id, payload)
+    return JSONResponse(record)
+
+
+@app.post("/api/publish/experiments/{experiment_id}/review")
+def review_experiment(
+    experiment_id: str, payload: PublishReviewInput
+) -> JSONResponse:
+    """生成偏差与下一轮建议，并标记可沉淀经验（候选017，不自动晋升）。"""
+    record = publish_calibration.review(experiment_id, note=payload.note)
+    return JSONResponse(record)
 
 
 @app.get("/", include_in_schema=False, response_model=None)

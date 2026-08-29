@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="登记内容实验，发布后按同一观察窗回填真实数据，并用不可变事件历史复盘。">
+    <title>发布校准 · 自媒体通关搭档</title>
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="/static/styles.css?v=20260829-2">
+  </head>
+  <body class="publish-page">
+    <a class="skip-link" href="#publishMain">跳到主要内容</a>
+    <header class="topbar">
+      <div class="topbar__inner">
+        <a class="brand" href="/">
+          <span class="brand__mark" aria-hidden="true">通</span>
+          <span class="brand__name">自媒体通关搭档</span>
+          <span class="brand__edition">内容工作台</span>
+        </a>
+        <nav class="topbar__nav" aria-label="主要导航">
+          <a class="topbar__link" href="/">内容分析</a>
+          <a class="topbar__link" href="/static/douyin.html">抖音运营</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="container publish-shell" id="publishMain">
+      <section class="publish-intro" aria-labelledby="publishTitle">
+        <p class="eyebrow">P3 · 发布校准</p>
+        <h1 id="publishTitle">先登记内容实验，再用真实数据复盘</h1>
+        <p><strong>内容实验</strong>记录本轮要测试的变量或策略，例如只改开头钩子、标题或发布时间；<strong>复盘基线</strong>是在发布前自愿写下预期区间，防止看到结果后再倒推解释，不是播放量预测或承诺。</p>
+        <ol class="publish-steps" aria-label="发布实验状态顺序">
+          <li><strong>1</strong><span>已登记</span></li>
+          <li><strong>2</strong><span>已发布</span></li>
+          <li><strong>3</strong><span>已回填</span></li>
+          <li><strong>4</strong><span>已复盘</span></li>
+        </ol>
+      </section>
+
+      <section class="publish-card calibration-card" aria-labelledby="calibrationTitle">
+        <div class="publish-card__heading">
+          <div>
+            <p class="publish-kicker">跨实验证据</p>
+            <h2 id="calibrationTitle">复盘基线摘要</h2>
+          </div>
+          <span class="calibration-state" id="calibrationState">读取中</span>
+        </div>
+        <div id="calibrationSummary" class="calibration-summary" aria-live="polite">
+          <p class="publish-empty">正在汇总已复盘实验…</p>
+        </div>
+      </section>
+
+      <section class="publish-card" aria-labelledby="createTitle">
+        <div class="publish-card__heading">
+          <div>
+            <p class="publish-kicker">第 1 步 · 登记内容实验</p>
+            <h2 id="createTitle">登记发布实验</h2>
+          </div>
+          <span class="required-note">* 为必填</span>
+        </div>
+        <form id="createForm" novalidate>
+          <div class="publish-form-grid publish-form-grid--two">
+            <div class="publish-field">
+              <label for="cTitle">标题 *</label>
+              <input id="cTitle" required maxlength="300" autocomplete="off" placeholder="例如：保健品开箱实测">
+            </div>
+            <div class="publish-field">
+              <label for="cPlatform">计划发布平台 *</label>
+              <input id="cPlatform" required maxlength="200" autocomplete="off" placeholder="例如：抖音 / TikTok">
+            </div>
+          </div>
+
+          <div class="publish-form-grid publish-form-grid--two">
+            <div class="publish-field">
+              <label for="cSourceTopicId">抖音内容编号</label>
+              <input id="cSourceTopicId" readonly maxlength="64" autocomplete="off" placeholder="从抖音运营页带入">
+            </div>
+            <div class="publish-field">
+              <label for="cSourceUrl">来源链接（对标内容）</label>
+              <input id="cSourceUrl" type="url" maxlength="2048" inputmode="url" placeholder="https://...">
+            </div>
+          </div>
+
+          <div class="publish-form-grid publish-form-grid--two">
+            <div class="publish-field">
+              <label for="cAnalysisRef">分析引用</label>
+              <input id="cAnalysisRef" maxlength="300" autocomplete="off" placeholder="例如：本次分析的用户可见引用">
+            </div>
+            <div class="publish-field publish-field--quiet">
+              <p class="field-help">内容编号用于串联抖音选题和发布实验，不包含采集任务或模型诊断。</p>
+            </div>
+          </div>
+
+          <div class="publish-field">
+            <label for="cContentSummary">内容快照摘要</label>
+            <textarea id="cContentSummary" rows="3" maxlength="20000" placeholder="写下这次准备发布的核心内容、开头钩子或脚本版本。登记后会生成内容版本哈希。"></textarea>
+          </div>
+          <div class="publish-field">
+            <label for="cHypothesis">本轮内容实验（测试变量 / 策略）</label>
+            <textarea id="cHypothesis" rows="3" maxlength="5000" placeholder="例如：本轮只替换前三秒钩子，其他脚本、时长和发布时间保持不变。"></textarea>
+          </div>
+
+          <details class="supplement" id="advancedScores">
+            <summary>高级项：7 维发布前自评（可选）<span class="summary-note">只记录当时判断，不代表平台结果</span></summary>
+            <p class="field-help">可只填写对本轮有意义的维度；每项为 1–5 分。</p>
+            <div class="score-grid" id="scoreGrid"></div>
+          </details>
+
+          <details class="supplement" id="advancedPredictions">
+            <summary>高级项：发布前复盘基线（可选）<span class="summary-note">仅用于发布后对照，不承诺准确</span></summary>
+            <p class="field-help">若填写某项，请同时填写预期下限和上限。计数指标使用非负整数；留存率使用 0–100 的百分比。</p>
+            <div class="prediction-window-control">
+              <label for="cWindowHours">统一观察窗口（小时）</label>
+              <input id="cWindowHours" type="number" min="1" max="8760" step="1" value="72" inputmode="numeric">
+              <span>默认 T+72 小时；发布后回填使用同一观察时点。</span>
+            </div>
+            <div class="prediction-grid" id="predGrid"></div>
+          </details>
+
+          <div class="publish-submit-row">
+            <button class="button button--primary" id="createSubmit" type="submit">登记发布实验</button>
+            <p class="publish-message" id="createMsg" role="status" aria-live="polite"></p>
+          </div>
+        </form>
+      </section>
+
+      <section class="publish-card" aria-labelledby="listTitle">
+        <div class="publish-card__heading">
+          <div>
+            <p class="publish-kicker">严格顺序 · 可追溯</p>
+            <h2 id="listTitle">已登记实验</h2>
+          </div>
+          <button class="button button--secondary" id="reloadExperiments" type="button">刷新</button>
+        </div>
+        <div id="experiments" aria-live="polite"><p class="publish-empty">加载中…</p></div>
+      </section>
+    </main>
+
+    <script src="/static/publish.js?v=20260829-2" defer></script>
+    <script src="/static/agent-panel.js?v=20260829-2" defer></script>
+  </body>
+</html>

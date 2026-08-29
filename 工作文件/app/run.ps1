@@ -7,6 +7,12 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$normalizedBindAddress = $BindAddress.Trim().ToLowerInvariant()
+$allowedBindAddresses = @("127.0.0.1", "localhost", "::1")
+if ($normalizedBindAddress -notin $allowedBindAddresses) {
+    throw "P3-05 包含本地账号数据和付费 Agent，当前只允许 127.0.0.1、localhost 或 ::1 回环监听。局域网或公网访问必须先实现访问控制并完成物理设备验收。"
+}
+$BindAddress = $BindAddress.Trim()
 $ProjectRoot = $PSScriptRoot
 $VenvDir = Join-Path $ProjectRoot ".venv"
 $VenvPython = Join-Path $VenvDir "Scripts\python.exe"
@@ -68,7 +74,7 @@ if ($requirementsHash -ne $currentHash) {
     )
 }
 
-$healthHost = if ($BindAddress -eq "0.0.0.0") { "127.0.0.1" } else { $BindAddress }
+$healthHost = if ($normalizedBindAddress -eq "::1") { "[::1]" } else { $BindAddress }
 $url = "http://${healthHost}:$Port"
 $arguments = @(
     "-m",
@@ -110,25 +116,6 @@ try {
     }
 
     Write-Host "电脑访问地址：$url"
-    if ($BindAddress -eq "0.0.0.0") {
-        $lanAddresses = @(
-            Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
-                Where-Object {
-                    $_.AddressState -eq "Preferred" -and
-                    -not $_.SkipAsSource -and
-                    ($_.IPAddress -like "10.*" -or
-                        $_.IPAddress -like "192.168.*" -or
-                        $_.IPAddress -match '^172\.(1[6-9]|2[0-9]|3[01])\.')
-                } |
-                Select-Object -ExpandProperty IPAddress -Unique
-        )
-        foreach ($address in $lanAddresses) {
-            Write-Host "手机访问地址（同一局域网）：http://${address}:$Port"
-        }
-        if (-not $lanAddresses) {
-            Write-Warning "未检测到私有局域网 IPv4 地址；手机地址需要在联网后重新确认。"
-        }
-    }
     Write-Host "按 Ctrl+C 停止服务。"
     if (-not $NoBrowser) {
         Start-Process $url
