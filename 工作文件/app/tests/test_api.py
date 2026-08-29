@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import unittest
+import base64
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
@@ -28,6 +29,41 @@ class ApiTests(unittest.TestCase):
         self.assertEqual("ok", response.json()["status"])
         self.assertEqual("自媒体通关搭档", response.json()["service"])
         self.assertIsInstance(response.json()["paid_content_enabled"], bool)
+
+    def test_private_preview_gate_blocks_without_credentials(self) -> None:
+        with patch.dict(
+            os.environ,
+            {
+                "PROJECT024_ACCESS_USERNAME": "preview-user",
+                "PROJECT024_ACCESS_PASSWORD": "preview-password",
+            },
+        ):
+            response = self.client.get("/")
+
+        self.assertEqual(401, response.status_code)
+        self.assertIn("Basic", response.headers["www-authenticate"])
+
+    def test_private_preview_gate_accepts_valid_credentials(self) -> None:
+        token = base64.b64encode(b"preview-user:preview-password").decode("ascii")
+        with patch.dict(
+            os.environ,
+            {
+                "PROJECT024_ACCESS_USERNAME": "preview-user",
+                "PROJECT024_ACCESS_PASSWORD": "preview-password",
+            },
+        ):
+            response = self.client.get("/", headers={"Authorization": f"Basic {token}"})
+
+        self.assertEqual(200, response.status_code)
+
+    def test_health_remains_available_for_host_checks(self) -> None:
+        with patch.dict(
+            os.environ,
+            {"PROJECT024_ACCESS_PASSWORD": "preview-password"},
+        ):
+            response = self.client.get("/api/health")
+
+        self.assertEqual(200, response.status_code)
 
     def test_platform_statuses(self) -> None:
         response = self.client.get("/api/platforms")

@@ -6,13 +6,14 @@ import importlib.util
 import json
 import os
 import re
+import secrets
 from copy import deepcopy
 from pathlib import Path
 from typing import Any, cast
 from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Query, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from starlette.datastructures import UploadFile as StarletteUploadFile
 from starlette.concurrency import run_in_threadpool
@@ -175,6 +176,45 @@ app = FastAPI(
     version=__version__,
     description="以可拍摄交付为前台、以证据与风险边界支持发布前审核的内容分析接口。",
 )
+
+
+def _deployment_access_credentials() -> tuple[str, str] | None:
+    password = os.environ.get("PROJECT024_ACCESS_PASSWORD", "").strip()
+    if not password:
+        return None
+    username = os.environ.get("PROJECT024_ACCESS_USERNAME", "project024").strip()
+    return username or "project024", password
+
+
+@app.middleware("http")
+async def deployment_access_gate(request: Request, call_next: Any) -> Response:
+    """Protect a temporary internet deployment until Supabase JWT is wired in."""
+    credentials = _deployment_access_credentials()
+    if credentials is None or request.url.path == "/api/health":
+        return await call_next(request)
+
+    authorization = request.headers.get("Authorization", "")
+    authenticated = False
+    if authorization.startswith("Basic "):
+        try:
+            decoded = base64.b64decode(
+                authorization.removeprefix("Basic ").strip(), validate=True
+            ).decode("utf-8")
+            supplied_username, supplied_password = decoded.split(":", 1)
+            expected_username, expected_password = credentials
+            authenticated = secrets.compare_digest(
+                supplied_username, expected_username
+            ) and secrets.compare_digest(supplied_password, expected_password)
+        except (ValueError, UnicodeDecodeError):
+            authenticated = False
+
+    if authenticated:
+        return await call_next(request)
+    return Response(
+        content="Project024 private preview",
+        status_code=401,
+        headers={"WWW-Authenticate": 'Basic realm="Project024 private preview"'},
+    )
 
 
 @app.exception_handler(PublishExperimentNotFoundError)

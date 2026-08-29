@@ -19,3 +19,13 @@
 在第 4 步之前不要把当前本机 `8792` 直接暴露到公网，也不要把测试用 `X-User-Id` / `X-Worker-Id` 当成生产认证。
 
 `.env.example` 只用于对照变量名称。不要把真实值写入 Git 仓库；正式部署时在托管平台的 Environment Variables 页面填写。
+
+## Render 私有预览阶段
+
+在 Supabase JWT 和真正的用户级数据隔离接入前，Render 部署必须设置：
+
+- `PROJECT024_ACCESS_USERNAME`：建议保持 `project024`。
+- `PROJECT024_ACCESS_PASSWORD`：仅放在 Render Secret 环境变量中的长随机密码。
+
+除 `/api/health` 外，页面和 API 都会触发浏览器访问密码提示。这只是小范围内测的临时保护，不代替 Supabase JWT、账号隔离和用量计量。
+容器在缺少 `PROJECT024_ACCESS_PASSWORD` 时会直接退出，防止因漏填密码而公开服务。
