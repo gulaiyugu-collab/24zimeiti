@@ -29,3 +29,10 @@
 
 除 `/api/health` 外，页面和 API 都会触发浏览器访问密码提示。这只是小范围内测的临时保护，不代替 Supabase JWT、账号隔离和用量计量。
 容器在缺少 `PROJECT024_ACCESS_PASSWORD` 时会直接退出，防止因漏填密码而公开服务。
+
+Render 的 `Root Directory` 不接受本仓库中的中文目录名，因此部署时使用仓库根目录和 ASCII Dockerfile 入口：
+
+- `Root Directory`：留空。
+- `Dockerfile Path`：`.render/Dockerfile`。
+
+`.render/Dockerfile` 只负责从 `工作文件/app` 复制当前活动应用，不改变本地目录结构。

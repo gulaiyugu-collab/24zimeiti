@@ -1,0 +1,10 @@
+**
+!.render/
+!.render/**
+!工作文件/
+!工作文件/app/
+!工作文件/app/requirements.txt
+!工作文件/app/app/
+!工作文件/app/app/**
+!工作文件/app/static/
+!工作文件/app/static/**
