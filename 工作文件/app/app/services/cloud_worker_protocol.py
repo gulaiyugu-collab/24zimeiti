@@ -35,6 +35,8 @@ class CloudTaskBackend(Protocol):
 
     def get(self, task_id: str) -> dict[str, Any]: ...
 
+    def list_for_owner(self, *, owner_id: str, limit: int = 20) -> list[dict[str, Any]]: ...
+
     def claim_next(self, *, worker_id: str, lease_seconds: int = 120, now: float | None = None) -> dict[str, Any] | None: ...
 
     def heartbeat(self, task_id: str, *, worker_id: str, lease_seconds: int = 120, now: float | None = None) -> dict[str, Any]: ...
@@ -131,6 +133,18 @@ class CloudTaskStore:
         if row is None:
             raise CloudTaskNotFoundError(task_id)
         return self._decode(row)
+
+    def list_for_owner(self, *, owner_id: str, limit: int = 20) -> list[dict[str, Any]]:
+        if not owner_id.strip():
+            raise ValueError("owner_id 不能为空")
+        if limit < 1 or limit > 50:
+            raise ValueError("limit 必须在 1..50")
+        with closing(self._open()) as connection:
+            rows = connection.execute(
+                "SELECT * FROM cloud_tasks WHERE owner_id = ? ORDER BY created_at DESC LIMIT ?",
+                (owner_id, limit),
+            ).fetchall()
+        return [self._decode(row) for row in rows]
 
     def create(
         self,

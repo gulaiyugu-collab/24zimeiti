@@ -122,6 +122,17 @@ def create_cloud_control_plane_app(
     def login(body: dict[str, str]) -> dict[str, Any]:
         return issue_local_token(str(body.get("email") or ""), str(body.get("password") or ""), False)
 
+    @app.get("/api/cloud/tasks")
+    def list_tasks(limit: int = 20, user: AuthenticatedUser = Depends(require_user)) -> dict[str, Any]:
+        list_method = getattr(get_backend(), "list_for_owner", None)
+        if not callable(list_method):
+            return {"tasks": []}
+        try:
+            tasks = list_method(owner_id=user.user_id, limit=limit)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return {"tasks": tasks}
+
     @app.post("/api/cloud/tasks", status_code=201)
     def create_task(body: TaskCreateBody, user: AuthenticatedUser = Depends(require_user)) -> dict[str, Any]:
         return get_backend().create(

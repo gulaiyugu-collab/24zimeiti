@@ -34,6 +34,9 @@ class DomesticControlPlaneTests(unittest.TestCase):
         headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
         created = self.client.post("/api/cloud/tasks", headers=headers, json={"idempotency_key": "mobile-1", "payload": {"url": "https://www.douyin.com/video/1"}})
         self.assertEqual(201, created.status_code)
+        listed = self.client.get("/api/cloud/tasks?limit=1", headers=headers)
+        self.assertEqual(200, listed.status_code)
+        self.assertEqual(created.json()["task_id"], listed.json()["tasks"][0]["task_id"])
         worker_headers = {"X-Worker-Id": "worker-a", "Authorization": "Bearer worker-secret-0123456789"}
         claimed = self.client.post("/workers/claim", headers=worker_headers)
         self.assertEqual(created.json()["task_id"], claimed.json()["task"]["task_id"])

@@ -48,6 +48,20 @@
       notice(error.message, true);
     }
   }
+  async function restoreLatestTask() {
+    const savedTaskId = sessionStorage.getItem(taskStorageKey);
+    if (savedTaskId) return poll(savedTaskId);
+    try {
+      const recent = await api("/api/cloud/tasks?limit=1");
+      const latest = Array.isArray(recent.tasks) ? recent.tasks[0] : null;
+      if (latest?.task_id) {
+        saveTaskId(latest.task_id);
+        poll(latest.task_id);
+      }
+    } catch (error) {
+      notice(error.message, true);
+    }
+  }
   async function submitTask() {
     const url = $("url").value.trim(); if (!url) return notice("请先粘贴公开链接。", true);
     $("submitButton").disabled = true;
@@ -61,8 +75,7 @@
       state.config = await api("/api/cloud/config");
       const saved = sessionStorage.getItem("project024-cloud-session"); if (saved) saveSession(JSON.parse(saved)); else renderAuth();
       if (state.config.mode !== "domestic") notice("当前不是国内控制面模式。", true);
-      const savedTaskId = sessionStorage.getItem(taskStorageKey);
-      if (savedTaskId && accessToken()) poll(savedTaskId);
+      if (accessToken()) restoreLatestTask();
     } catch (error) { notice(error.message, true); }
   }
   function credentials() {
