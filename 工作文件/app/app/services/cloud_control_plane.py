@@ -184,7 +184,18 @@ def create_cloud_control_plane_app(
         page = static_dir / "cloud.html"
         if not page.is_file():
             raise HTTPException(status_code=404, detail="手机入口尚未打包")
-        return FileResponse(page)
+        return FileResponse(page, headers={"Cache-Control": "no-store"})
+
+    @app.get("/static/cloud.js", include_in_schema=False)
+    def cloud_script() -> FileResponse:
+        script = static_dir / "cloud.js"
+        if not script.is_file():
+            raise HTTPException(status_code=404, detail="手机入口脚本尚未打包")
+        return FileResponse(
+            script,
+            media_type="application/javascript",
+            headers={"Cache-Control": "no-store"},
+        )
 
     return app
 

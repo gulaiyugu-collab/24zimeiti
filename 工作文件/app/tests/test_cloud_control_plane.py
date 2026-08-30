@@ -99,6 +99,12 @@ class CloudControlPlaneTests(unittest.TestCase):
         page = self.client.get("/cloud")
         self.assertEqual(200, page.status_code)
         self.assertIn("项目024", page.text)
+        self.assertEqual("no-store", page.headers.get("cache-control"))
+        script = self.client.get("/static/cloud.js")
+        self.assertEqual(200, script.status_code)
+        self.assertIn("signupButton", script.text)
+        self.assertIn("application/javascript", script.headers.get("content-type", ""))
+        self.assertEqual("no-store", script.headers.get("cache-control"))
 
 
 if __name__ == "__main__":
