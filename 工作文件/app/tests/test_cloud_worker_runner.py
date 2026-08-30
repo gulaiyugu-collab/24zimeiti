@@ -91,6 +91,30 @@ class CloudWorkerRunnerTests(unittest.TestCase):
         runner.run_forever(stop_event=stop)
         self.assertEqual([("claim", "120"), ("complete", "ct-4")], client.events)
 
+    def test_run_forever_retries_transient_claim_failure(self) -> None:
+        stop = threading.Event()
+
+        class RetryClient(FakeClient):
+            def __init__(self) -> None:
+                super().__init__(None)
+                self.attempts = 0
+
+            def claim(self, *, lease_seconds: int) -> dict | None:
+                self.attempts += 1
+                if self.attempts == 1:
+                    raise ConnectionError("temporary network failure")
+                stop.set()
+                return None
+
+        client = RetryClient()
+        runner = CloudWorkerRunner(
+            client,
+            executor=lambda payload: {},
+            settings=WorkerSettings(poll_seconds=0.01),
+        )
+        runner.run_forever(stop_event=stop)
+        self.assertEqual(2, client.attempts)
+
     def test_http_client_round_trip_uses_worker_header(self) -> None:
         seen: list[tuple[str, str | None]] = []
 

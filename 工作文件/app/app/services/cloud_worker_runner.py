@@ -136,6 +136,7 @@ class CloudWorkerRunner:
             return "idle"
         task_id = str(task.get("task_id") or "").strip()
         payload = task.get("payload")
+        print(f"云端 Worker 已领取任务：{task_id or '无任务号'}", flush=True)
         if not task_id or not isinstance(payload, dict):
             if task_id:
                 self.client.fail(
@@ -163,6 +164,7 @@ class CloudWorkerRunner:
             if heartbeat_errors:
                 raise RuntimeError("云端租约心跳失败，停止回传以避免重复执行") from heartbeat_errors[0]
             self.client.complete(task_id, result=result)
+            print(f"云端 Worker 任务已完成：{task_id}", flush=True)
             return "completed"
         except Exception as exc:
             self.client.fail(
@@ -170,6 +172,7 @@ class CloudWorkerRunner:
                 error={"type": type(exc).__name__, "message": str(exc)[:500]},
                 retryable=True,
             )
+            print(f"云端 Worker 任务失败：{task_id}（{type(exc).__name__}: {str(exc)[:200]}）", flush=True)
             return "failed"
         finally:
             stop_event.set()
@@ -178,7 +181,17 @@ class CloudWorkerRunner:
     def run_forever(self, *, stop_event: threading.Event | None = None) -> None:
         stopper = stop_event or threading.Event()
         while not stopper.is_set():
-            outcome = self.run_once()
+            try:
+                outcome = self.run_once()
+            except Exception as exc:
+                # Keep the local Worker alive across transient control-plane or
+                # network failures, while making the failure visible locally.
+                print(
+                    f"云端 Worker 轮询失败，将重试：{type(exc).__name__}: {str(exc)[:200]}",
+                    flush=True,
+                )
+                stopper.wait(min(max(self.settings.poll_seconds, 5.0), 30.0))
+                continue
             if outcome == "idle":
                 stopper.wait(self.settings.poll_seconds)
 
@@ -256,6 +269,10 @@ def main() -> int:
 
     if not args.worker_token:
         parser.error("production Worker requires --worker-token or PROJECT024_CLOUD_WORKER_TOKEN")
+    print(
+        f"云端 Worker 已启动：worker_id={args.worker_id}，控制面={args.base_url}",
+        flush=True,
+    )
     client = HttpCloudWorkerClient(args.base_url, args.worker_id, args.worker_token)
     try:
         runner = CloudWorkerRunner(
