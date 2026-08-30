@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 container="project024-control"
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-repo_dir="$(cd -- "$script_dir/../.." && pwd)"
+repo_dir="$(cd -- "$script_dir/../../.." && pwd)"
 cd "$repo_dir"
 
 commit="$(git rev-parse --short HEAD)"
