@@ -1,4 +1,4 @@
-"""Production control plane: Supabase-authenticated users and local Workers."""
+"""Production control plane for the mainland deployment and local Workers."""
 
 from __future__ import annotations
 
@@ -11,7 +11,8 @@ from fastapi import Depends, FastAPI, Header, HTTPException, status
 from fastapi.responses import FileResponse
 
 from .cloud_worker_http import CompleteBody, FailBody, HeartbeatBody, TaskCreateBody
-from .cloud_worker_protocol import CloudTaskBackend, CloudTaskConflictError, CloudTaskNotFoundError
+from .cloud_worker_protocol import CloudTaskBackend, CloudTaskConflictError, CloudTaskNotFoundError, CloudTaskStore
+from .domestic_auth import DomesticAuthError, LocalAuthStore, LocalJWTAuthenticator
 from .supabase_auth import AuthenticatedUser, SupabaseAuthError, SupabaseJWTAuthenticator
 from .supabase_tasks import SupabaseTaskBackend
 
@@ -24,13 +25,18 @@ def _bearer(value: str | None) -> str | None:
 def create_cloud_control_plane_app(
     *,
     backend: CloudTaskBackend | None = None,
-    authenticator: SupabaseJWTAuthenticator | None = None,
+    authenticator: Any | None = None,
     worker_token: str | None = None,
+    domestic_mode: bool | None = None,
+    domestic_database_path: str | os.PathLike[str] | None = None,
 ) -> FastAPI:
     app = FastAPI(title="Project024 Cloud Control Plane", version="1.0")
     static_dir = Path(__file__).resolve().parents[2] / "static"
-    configured_backend = backend
-    configured_authenticator = authenticator or SupabaseJWTAuthenticator()
+    use_domestic = domestic_mode if domestic_mode is not None else os.getenv("PROJECT024_DOMESTIC_MODE", "1").strip() != "0"
+    task_database_path = domestic_database_path or os.getenv("PROJECT024_CLOUD_TASK_DB", "var/cloud-control.sqlite3")
+    local_auth_store = LocalAuthStore(task_database_path) if use_domestic and authenticator is None else None
+    configured_backend = backend or (CloudTaskStore(task_database_path) if use_domestic else None)
+    configured_authenticator = authenticator or (LocalJWTAuthenticator() if use_domestic else SupabaseJWTAuthenticator())
     configured_worker_token = worker_token
 
     def get_backend() -> CloudTaskBackend:
@@ -42,6 +48,15 @@ def create_cloud_control_plane_app(
                 raise HTTPException(status_code=503, detail="云端数据库尚未配置") from exc
         return configured_backend
 
+    def issue_local_token(email: str, password: str, register: bool) -> dict[str, Any]:
+        if not local_auth_store or not isinstance(configured_authenticator, LocalJWTAuthenticator):
+            raise HTTPException(status_code=404, detail="国内登录模式未启用")
+        try:
+            user = local_auth_store.register(email, password) if register else local_auth_store.authenticate(email, password)
+        except DomesticAuthError as exc:
+            raise HTTPException(status_code=400 if register else 401, detail=str(exc)) from exc
+        return {"access_token": configured_authenticator.issue(user), "token_type": "bearer", "user": user}
+
     def require_user(authorization: str | None = Header(default=None)) -> AuthenticatedUser:
         token = _bearer(authorization)
         if not token:
@@ -52,10 +67,10 @@ def create_cloud_control_plane_app(
             )
         try:
             return configured_authenticator.verify(token)
-        except SupabaseAuthError as exc:
+        except (SupabaseAuthError, DomesticAuthError) as exc:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Supabase 登录令牌无效或已过期",
+                detail="登录令牌无效或已过期",
                 headers={"WWW-Authenticate": "Bearer"},
             ) from exc
 
@@ -79,13 +94,16 @@ def create_cloud_control_plane_app(
         return {
             "status": "ok",
             "service": "project024-cloud-control-plane",
-            "supabase_configured": bool(os.getenv("SUPABASE_URL") and os.getenv("SUPABASE_SECRET_KEY")) or backend is not None,
+            "mode": "domestic" if use_domestic else "supabase-legacy",
+            "supabase_configured": (not use_domestic) and bool(os.getenv("SUPABASE_URL") and os.getenv("SUPABASE_SECRET_KEY")),
             "worker_auth_configured": bool(configured_worker_token or os.getenv("PROJECT024_CLOUD_WORKER_TOKEN")),
         }
 
     @app.get("/api/cloud/config")
     def cloud_config() -> dict[str, Any]:
-        """Return browser-safe Supabase configuration; never return server secrets."""
+        """Return browser-safe client configuration; never return server secrets."""
+        if use_domestic:
+            return {"mode": "domestic", "configured": True}
         publishable_key = (
             os.getenv("SUPABASE_PUBLISHABLE_KEY", "").strip()
             or os.getenv("SUPABASE_ANON_KEY", "").strip()
@@ -95,6 +113,14 @@ def create_cloud_control_plane_app(
             "supabase_publishable_key": publishable_key,
             "configured": bool(os.getenv("SUPABASE_URL") and publishable_key),
         }
+
+    @app.post("/api/auth/register")
+    def register(body: dict[str, str]) -> dict[str, Any]:
+        return issue_local_token(str(body.get("email") or ""), str(body.get("password") or ""), True)
+
+    @app.post("/api/auth/login")
+    def login(body: dict[str, str]) -> dict[str, Any]:
+        return issue_local_token(str(body.get("email") or ""), str(body.get("password") or ""), False)
 
     @app.post("/api/cloud/tasks", status_code=201)
     def create_task(body: TaskCreateBody, user: AuthenticatedUser = Depends(require_user)) -> dict[str, Any]:

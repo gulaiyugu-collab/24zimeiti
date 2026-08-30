@@ -1,5 +1,7 @@
 # Project024 云端 MVP 部署准备
 
+国内正式路线使用 `domestic-cloud.md`：腾讯云大陆服务器自带 SQLite 任务库和登录，不依赖 Supabase，也不需要执行 Supabase SQL。下面的 Supabase/Render 内容只保留给旧版境外预览，不是本次上线入口。
+
 这份目录只包含无需付费即可准备的部署材料。当前主应用仍是本机 `8792` 活动版本，真实公网部署必须在完成 JWT、账号隔离和 HTTPS 接入后进行。
 
 ## 当前已准备

@@ -17,4 +17,4 @@ USER app
 
 EXPOSE 8787
 
-CMD ["sh", "-c", "test -n \"$SUPABASE_URL\" || { echo 'SUPABASE_URL is required'; exit 1; }; test -n \"$SUPABASE_SECRET_KEY\" || { echo 'SUPABASE_SECRET_KEY is required'; exit 1; }; test -n \"$PROJECT024_CLOUD_WORKER_TOKEN\" || { echo 'PROJECT024_CLOUD_WORKER_TOKEN is required'; exit 1; }; exec uvicorn app.services.cloud_control_plane:app --host 0.0.0.0 --port ${PORT:-8787}"]
+CMD ["sh", "-c", "test -n \"$PROJECT024_AUTH_SECRET\" || { echo 'PROJECT024_AUTH_SECRET is required'; exit 1; }; test -n \"$PROJECT024_CLOUD_WORKER_TOKEN\" || { echo 'PROJECT024_CLOUD_WORKER_TOKEN is required'; exit 1; }; exec uvicorn app.services.cloud_control_plane:app --host 0.0.0.0 --port ${PORT:-8787}"]

@@ -4,9 +4,8 @@
   const terminal = new Set(["completed", "failed"]);
   const notice = (message, error = false) => { const node = $("notice"); node.textContent = message || ""; node.style.color = error ? "#b42318" : "#637089"; };
   const accessToken = () => state.session?.access_token || "";
-  async function supabaseAuth(path, body) {
-    if (!state.config?.configured) throw new Error("云端尚未配置 Supabase 公钥，请先完成服务端配置。");
-    const response = await fetch(`${state.config.supabase_url}/auth/v1/${path}`, { method: "POST", headers: { apikey: state.config.supabase_publishable_key, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  async function localAuth(path, body) {
+    const response = await fetch(`/api/auth/${path}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data.error_description || data.msg || data.message || "登录失败");
     return data;
@@ -53,11 +52,11 @@
     try {
       state.config = await api("/api/cloud/config");
       const saved = sessionStorage.getItem("project024-cloud-session"); if (saved) saveSession(JSON.parse(saved)); else renderAuth();
-      if (!state.config.configured) notice("服务端还没有配置 Supabase 公钥。部署时需补 SUPABASE_PUBLISHABLE_KEY。", true);
+      if (state.config.mode !== "domestic") notice("当前不是国内控制面模式。", true);
     } catch (error) { notice(error.message, true); }
   }
-  $("loginButton").addEventListener("click", async () => { try { saveSession(await supabaseAuth("token?grant_type=password", { email: $("email").value.trim(), password: $("password").value })); notice("登录成功。"); } catch (error) { notice(error.message, true); } });
-  $("signupButton").addEventListener("click", async () => { try { const data = await supabaseAuth("signup", { email: $("email").value.trim(), password: $("password").value }); saveSession(data.access_token ? data : null); notice(data.access_token ? "注册并登录成功。" : "注册成功，请查收邮箱确认后再登录。"); } catch (error) { notice(error.message, true); } });
+  $("loginButton").addEventListener("click", async () => { try { saveSession(await localAuth("login", { email: $("email").value.trim(), password: $("password").value })); notice("登录成功。"); } catch (error) { notice(error.message, true); } });
+  $("signupButton").addEventListener("click", async () => { try { saveSession(await localAuth("register", { email: $("email").value.trim(), password: $("password").value })); notice("注册并登录成功。"); } catch (error) { notice(error.message, true); } });
   $("logoutButton").addEventListener("click", () => { clearTimeout(state.pollTimer); saveSession(null); notice("已退出登录。"); });
   $("submitButton").addEventListener("click", submitTask);
   start();
