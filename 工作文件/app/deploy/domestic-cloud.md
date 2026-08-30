@@ -25,6 +25,8 @@ docker build -f Dockerfile.control -t project024-control .
 SUPABASE_URL=https://你的项目编号.supabase.co
 SUPABASE_SECRET_KEY=只填写在服务器，不要提交 Git
 SUPABASE_PUBLISHABLE_KEY=Supabase 项目设置中的 publishable/anon 公钥
+# 只有旧版 HS256 项目需要；新项目通常使用 JWKS，可留空
+SUPABASE_JWT_SECRET=旧版项目的 JWT Secret（如无则留空）
 PROJECT024_CLOUD_WORKER_TOKEN=你自己生成的长随机 Worker 凭据
 ```
 
