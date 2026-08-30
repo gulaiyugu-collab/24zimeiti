@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>项目024 手机入口</title>
+    <style>
+      :root { color-scheme: light; font-family: system-ui, -apple-system, "Microsoft YaHei", sans-serif; }
+      body { margin: 0; background: #f5f7fb; color: #172033; }
+      main { width: min(680px, calc(100% - 28px)); margin: 0 auto; padding: 24px 0 48px; }
+      h1 { margin: 0 0 6px; font-size: 26px; }
+      .muted { color: #637089; font-size: 14px; }
+      section { background: white; border: 1px solid #e2e7f0; border-radius: 8px; padding: 18px; margin-top: 16px; }
+      label { display: block; margin: 12px 0 6px; font-weight: 600; font-size: 14px; }
+      input { box-sizing: border-box; width: 100%; border: 1px solid #c9d1df; border-radius: 6px; padding: 11px 12px; font-size: 16px; }
+      button { border: 0; border-radius: 6px; padding: 11px 14px; font-size: 15px; cursor: pointer; background: #1d5fd1; color: white; }
+      button.secondary { background: #e8eef9; color: #1d4e9e; }
+      button:disabled { opacity: .55; cursor: wait; }
+      .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+      #notice { min-height: 22px; margin-top: 12px; white-space: pre-wrap; }
+      #result { white-space: pre-wrap; overflow-wrap: anywhere; background: #f7f9fc; padding: 12px; border-radius: 6px; font-size: 13px; }
+      .hidden { display: none; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>项目024 手机入口</h1>
+      <div class="muted">手机只负责登录、提交链接和查看状态；视频采集与 GPU 转写仍在你的电脑上进行。</div>
+      <section id="authSection">
+        <strong>先登录</strong>
+        <label for="email">邮箱</label>
+        <input id="email" type="email" autocomplete="email" placeholder="你在 Supabase 注册的邮箱" />
+        <label for="password">密码</label>
+        <input id="password" type="password" autocomplete="current-password" placeholder="登录密码" />
+        <div class="actions"><button id="loginButton">登录</button><button id="signupButton" class="secondary">注册新账号</button></div>
+      </section>
+      <section id="taskSection" class="hidden">
+        <div class="actions" style="justify-content:space-between;align-items:center;margin-top:0"><strong id="signedInAs"></strong><button id="logoutButton" class="secondary">退出登录</button></div>
+        <label for="url">抖音或 TikTok 公开链接</label>
+        <input id="url" type="url" placeholder="粘贴公开作品链接" />
+        <label for="itemLimit">采集数量</label>
+        <input id="itemLimit" type="number" min="1" max="20" value="1" />
+        <div class="actions"><button id="submitButton">提交任务</button></div>
+        <div class="muted">提交后请保持电脑 Worker 运行，否则任务会一直排队。</div>
+      </section>
+      <section id="statusSection" class="hidden"><strong>任务状态</strong><div id="status" class="muted" style="margin-top:8px"></div><pre id="result"></pre></section>
+      <div id="notice" class="muted" role="status" aria-live="polite"></div>
+    </main>
+    <script src="/static/cloud.js" defer></script>
+  </body>
+</html>

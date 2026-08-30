@@ -36,3 +36,5 @@ Render 的 `Root Directory` 不接受本仓库中的中文目录名，因此部�
 - `Dockerfile Path`：`.render/Dockerfile`。
 
 `.render/Dockerfile` 只负责从 `工作文件/app` 复制当前活动应用，不改变本地目录结构。
+
+国内云控制面入口见 `domestic-cloud.md`。它使用仓库根目录的 `Dockerfile.control`，只运行 Supabase 任务控制面；本机 RTX 4060 Ti 仍由 `cloud_worker_runner` 负责实际采集和转写。

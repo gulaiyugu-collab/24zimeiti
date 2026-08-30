@@ -77,6 +77,8 @@ from .visual_analysis import (
     VisualAnalysisError,
     VisualAnalyzer,
 )
+from .supabase_auth import AuthenticatedUser, SupabaseAuthError, SupabaseJWTAuthenticator
+from .supabase_tasks import SupabaseTaskBackend
 
 __all__ = [
     "AcquisitionJobManager",
@@ -140,4 +142,8 @@ __all__ = [
     "VisualAnalysisConfig",
     "VisualAnalysisError",
     "VisualAnalyzer",
+    "AuthenticatedUser",
+    "SupabaseAuthError",
+    "SupabaseJWTAuthenticator",
+    "SupabaseTaskBackend",
 ]

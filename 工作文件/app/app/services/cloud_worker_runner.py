@@ -198,7 +198,7 @@ def make_local_acquisition_executor(local_root: str | os.PathLike[str]) -> TaskE
             }
         )
         status = manager.submit(request)
-        return {
+        result: dict[str, Any] = {
             "local_job_id": status.get("job_id"),
             "status": status.get("status"),
             "platform": status.get("platform"),
@@ -206,6 +206,15 @@ def make_local_acquisition_executor(local_root: str | os.PathLike[str]) -> TaskE
             "message": status.get("message"),
             "missing": status.get("missing", []),
         }
+        # The cloud task stores a compact status plus the local evidence manifest.
+        # Raw media remains on the user's computer; only the manifest is returned.
+        job_id = str(status.get("job_id") or "").strip()
+        if job_id and status.get("status") in {"completed", "needs_input"}:
+            try:
+                result["manifest"] = store.manifest(job_id)
+            except Exception:
+                result["manifest"] = None
+        return result
 
     return execute
 
@@ -225,6 +234,8 @@ def main() -> int:
     if not args.local_root:
         parser.error("必须提供 --local-root 或 PROJECT024_ACQUISITION_ROOT")
 
+    if not args.worker_token:
+        parser.error("production Worker requires --worker-token or PROJECT024_CLOUD_WORKER_TOKEN")
     client = HttpCloudWorkerClient(args.base_url, args.worker_id, args.worker_token)
     try:
         runner = CloudWorkerRunner(
