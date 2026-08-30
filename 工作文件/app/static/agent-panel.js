@@ -366,7 +366,10 @@
     try {
       const response = await fetch("/api/agent/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(window.project024CloudAuthHeaders?.() || {})
+        },
         body: JSON.stringify({
           message,
           mode: requestMode,

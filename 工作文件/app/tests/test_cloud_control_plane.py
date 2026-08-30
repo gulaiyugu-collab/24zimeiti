@@ -108,6 +108,9 @@ class CloudControlPlaneTests(unittest.TestCase):
         self.assertIn("/api/cloud/tasks?limit=1", script.text)
         self.assertIn("application/javascript", script.headers.get("content-type", ""))
         self.assertEqual("no-store", script.headers.get("cache-control"))
+        self.assertEqual(200, self.client.get("/static/agent-panel.js").status_code)
+        self.assertEqual(200, self.client.get("/static/styles.css").status_code)
+        self.assertEqual(200, self.client.get("/api/agent/status").status_code)
 
 
 if __name__ == "__main__":

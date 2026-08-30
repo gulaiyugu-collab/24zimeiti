@@ -1,10 +1,26 @@
 (() => {
   const $ = (id) => document.getElementById(id);
-  const state = { config: null, session: null, pollTimer: null };
+  const state = { config: null, session: null, pollTimer: null, lastTask: null };
   const terminal = new Set(["completed", "failed"]);
   const taskStorageKey = "project024-cloud-task-id";
   const notice = (message, error = false) => { const node = $("notice"); node.textContent = message || ""; node.style.color = error ? "#b42318" : "#637089"; };
   const accessToken = () => state.session?.access_token || "";
+  window.project024CloudAuthHeaders = () => accessToken() ? { Authorization: `Bearer ${accessToken()}` } : {};
+  window.project024AgentBridge = {
+    async getContext() {
+      const task = state.lastTask;
+      const result = task?.result && typeof task.result === "object" ? task.result : {};
+      return {
+        draft: "",
+        context: {
+          task_id: task?.task_id || "",
+          task_status: task?.status || "",
+          source_url: task?.payload?.url || result?.source_url || "",
+          analysis: JSON.stringify(result).slice(0, 30000),
+        },
+      };
+    },
+  };
   async function localAuth(path, body) {
     const response = await fetch(`/api/auth/${path}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     const data = await response.json().catch(() => ({}));
@@ -34,6 +50,7 @@
     if (taskId) sessionStorage.setItem(taskStorageKey, taskId); else sessionStorage.removeItem(taskStorageKey);
   }
   function renderTask(task) {
+    state.lastTask = task;
     saveTaskId(task.task_id);
     $("statusSection").classList.remove("hidden");
     $("status").textContent = `任务 ${task.task_id}：${task.status}`;

@@ -8,13 +8,21 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from .cloud_worker_http import CompleteBody, FailBody, HeartbeatBody, TaskCreateBody
 from .cloud_worker_protocol import CloudTaskBackend, CloudTaskConflictError, CloudTaskNotFoundError, CloudTaskStore
 from .domestic_auth import DomesticAuthError, LocalAuthStore, LocalJWTAuthenticator
 from .supabase_auth import AuthenticatedUser, SupabaseAuthError, SupabaseJWTAuthenticator
 from .supabase_tasks import SupabaseTaskBackend
+from .operations_agent import (
+    OperationsAgent,
+    OperationsAgentConfirmationError,
+    OperationsAgentError,
+    OperationsAgentRequest,
+    OperationsAgentUnavailableError,
+)
 
 
 def _bearer(value: str | None) -> str | None:
@@ -37,6 +45,7 @@ def create_cloud_control_plane_app(
     local_auth_store = LocalAuthStore(task_database_path) if use_domestic and authenticator is None else None
     configured_backend = backend or (CloudTaskStore(task_database_path) if use_domestic else None)
     configured_authenticator = authenticator or (LocalJWTAuthenticator() if use_domestic else SupabaseJWTAuthenticator())
+    operations_agent = OperationsAgent()
     configured_worker_token = worker_token
 
     def get_backend() -> CloudTaskBackend:
@@ -133,6 +142,24 @@ def create_cloud_control_plane_app(
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         return {"tasks": tasks}
 
+    @app.get("/api/agent/status")
+    def operations_agent_status() -> dict[str, Any]:
+        return operations_agent.plan()
+
+    @app.post("/api/agent/chat")
+    async def operations_agent_chat(
+        payload: OperationsAgentRequest,
+        _user: AuthenticatedUser = Depends(require_user),
+    ) -> JSONResponse:
+        try:
+            return JSONResponse(await operations_agent.chat(payload))
+        except OperationsAgentConfirmationError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except OperationsAgentUnavailableError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        except OperationsAgentError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+
     @app.post("/api/cloud/tasks", status_code=201)
     def create_task(body: TaskCreateBody, user: AuthenticatedUser = Depends(require_user)) -> dict[str, Any]:
         return get_backend().create(
@@ -207,6 +234,8 @@ def create_cloud_control_plane_app(
             media_type="application/javascript",
             headers={"Cache-Control": "no-store"},
         )
+
+    app.mount("/static", StaticFiles(directory=static_dir), name="cloud-static")
 
     return app
 
