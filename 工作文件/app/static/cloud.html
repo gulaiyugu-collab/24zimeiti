@@ -29,9 +29,9 @@
       <section id="authSection">
         <strong>先登录</strong>
         <label for="email">邮箱</label>
-        <input id="email" type="email" autocomplete="email" placeholder="输入邮箱" />
+        <input id="email" type="email" autocomplete="email" placeholder="输入邮箱" required />
         <label for="password">密码</label>
-        <input id="password" type="password" autocomplete="current-password" placeholder="登录密码" />
+        <input id="password" type="password" autocomplete="new-password" minlength="8" placeholder="至少 8 位密码" required />
         <div class="actions"><button id="loginButton">登录</button><button id="signupButton" class="secondary">注册新账号</button></div>
       </section>
       <section id="taskSection" class="hidden">

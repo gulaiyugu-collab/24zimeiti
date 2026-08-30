@@ -7,7 +7,7 @@
   async function localAuth(path, body) {
     const response = await fetch(`/api/auth/${path}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data.error_description || data.msg || data.message || "登录失败");
+    if (!response.ok) throw new Error(data.detail || data.error_description || data.msg || data.message || "登录失败");
     return data;
   }
   async function api(path, options = {}) {
@@ -55,8 +55,16 @@
       if (state.config.mode !== "domestic") notice("当前不是国内控制面模式。", true);
     } catch (error) { notice(error.message, true); }
   }
-  $("loginButton").addEventListener("click", async () => { try { saveSession(await localAuth("login", { email: $("email").value.trim(), password: $("password").value })); notice("登录成功。"); } catch (error) { notice(error.message, true); } });
-  $("signupButton").addEventListener("click", async () => { try { saveSession(await localAuth("register", { email: $("email").value.trim(), password: $("password").value })); notice("注册并登录成功。"); } catch (error) { notice(error.message, true); } });
+  function credentials() {
+    const email = $("email").value.trim();
+    const password = $("password").value;
+    if (!email) throw new Error("请先输入邮箱。");
+    if (!email.includes("@")) throw new Error("邮箱格式不正确。");
+    if (password.length < 8) throw new Error("密码至少需要 8 位。");
+    return { email, password };
+  }
+  $("loginButton").addEventListener("click", async () => { try { saveSession(await localAuth("login", credentials())); notice("登录成功。"); } catch (error) { notice(error.message, true); } });
+  $("signupButton").addEventListener("click", async () => { try { saveSession(await localAuth("register", credentials())); notice("注册并登录成功。"); } catch (error) { notice(error.message, true); } });
   $("logoutButton").addEventListener("click", () => { clearTimeout(state.pollTimer); saveSession(null); notice("已退出登录。"); });
   $("submitButton").addEventListener("click", submitTask);
   start();
