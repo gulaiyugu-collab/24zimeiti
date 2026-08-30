@@ -103,6 +103,8 @@ class CloudControlPlaneTests(unittest.TestCase):
         script = self.client.get("/static/cloud.js")
         self.assertEqual(200, script.status_code)
         self.assertIn("signupButton", script.text)
+        self.assertIn("project024-cloud-task-id", script.text)
+        self.assertIn("savedTaskId", script.text)
         self.assertIn("application/javascript", script.headers.get("content-type", ""))
         self.assertEqual("no-store", script.headers.get("cache-control"))
 

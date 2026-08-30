@@ -2,6 +2,7 @@
   const $ = (id) => document.getElementById(id);
   const state = { config: null, session: null, pollTimer: null };
   const terminal = new Set(["completed", "failed"]);
+  const taskStorageKey = "project024-cloud-task-id";
   const notice = (message, error = false) => { const node = $("notice"); node.textContent = message || ""; node.style.color = error ? "#b42318" : "#637089"; };
   const accessToken = () => state.session?.access_token || "";
   async function localAuth(path, body) {
@@ -29,7 +30,11 @@
     if (session) sessionStorage.setItem("project024-cloud-session", JSON.stringify(session)); else sessionStorage.removeItem("project024-cloud-session");
     renderAuth();
   }
+  function saveTaskId(taskId) {
+    if (taskId) sessionStorage.setItem(taskStorageKey, taskId); else sessionStorage.removeItem(taskStorageKey);
+  }
   function renderTask(task) {
+    saveTaskId(task.task_id);
     $("statusSection").classList.remove("hidden");
     $("status").textContent = `任务 ${task.task_id}：${task.status}`;
     $("result").textContent = task.result ? JSON.stringify(task.result, null, 2) : (task.error ? JSON.stringify(task.error, null, 2) : "等待电脑 Worker 领取任务…");
@@ -38,7 +43,10 @@
     try {
       const task = await api(`/api/cloud/tasks/${encodeURIComponent(taskId)}`); renderTask(task);
       if (!terminal.has(task.status)) state.pollTimer = setTimeout(() => poll(taskId), 3000); else notice(task.status === "completed" ? "任务已完成，可以查看结果。" : "任务失败，请查看结果区域中的原因。", task.status === "failed");
-    } catch (error) { notice(error.message, true); }
+    } catch (error) {
+      if (error.message === "任务不存在") saveTaskId(null);
+      notice(error.message, true);
+    }
   }
   async function submitTask() {
     const url = $("url").value.trim(); if (!url) return notice("请先粘贴公开链接。", true);
@@ -53,6 +61,8 @@
       state.config = await api("/api/cloud/config");
       const saved = sessionStorage.getItem("project024-cloud-session"); if (saved) saveSession(JSON.parse(saved)); else renderAuth();
       if (state.config.mode !== "domestic") notice("当前不是国内控制面模式。", true);
+      const savedTaskId = sessionStorage.getItem(taskStorageKey);
+      if (savedTaskId && accessToken()) poll(savedTaskId);
     } catch (error) { notice(error.message, true); }
   }
   function credentials() {
@@ -65,7 +75,7 @@
   }
   $("loginButton").addEventListener("click", async () => { try { saveSession(await localAuth("login", credentials())); notice("登录成功。"); } catch (error) { notice(error.message, true); } });
   $("signupButton").addEventListener("click", async () => { try { saveSession(await localAuth("register", credentials())); notice("注册并登录成功。"); } catch (error) { notice(error.message, true); } });
-  $("logoutButton").addEventListener("click", () => { clearTimeout(state.pollTimer); saveSession(null); notice("已退出登录。"); });
+  $("logoutButton").addEventListener("click", () => { clearTimeout(state.pollTimer); saveTaskId(null); saveSession(null); notice("已退出登录。"); });
   $("submitButton").addEventListener("click", submitTask);
   start();
 })();
