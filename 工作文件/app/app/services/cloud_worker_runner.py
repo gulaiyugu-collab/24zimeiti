@@ -214,6 +214,26 @@ def make_local_acquisition_executor(local_root: str | os.PathLike[str]) -> TaskE
                 result["manifest"] = store.manifest(job_id)
             except Exception:
                 result["manifest"] = None
+        if status.get("status") == "completed":
+            # Reuse the same analysis endpoint as the desktop app after local
+            # acquisition. The import stays lazy so the Worker protocol remains
+            # lightweight for tests and idle polling.
+            import asyncio
+            from app.main import analyze_acquisition_job
+            from app.models import AcquisitionAnalysisRequest
+
+            analysis_request = AcquisitionAnalysisRequest.model_validate(
+                {
+                    "analysis_mode": payload.get("analysis_mode", "quick"),
+                    "analysis_strategy": payload.get("analysis_strategy", "multi_agent"),
+                    "product_context": payload.get("product_context"),
+                    "product": payload.get("product"),
+                    "product_relevance_override": payload.get("product_relevance_override"),
+                    "market": payload.get("market") or {},
+                }
+            )
+            analysis = asyncio.run(analyze_acquisition_job(job_id, analysis_request))
+            result["analysis"] = analysis.model_dump(mode="json")
         return result
 
     return execute

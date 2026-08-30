@@ -44,7 +44,7 @@
     const url = $("url").value.trim(); if (!url) return notice("请先粘贴公开链接。", true);
     $("submitButton").disabled = true;
     try {
-      const task = await api("/api/cloud/tasks", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ idempotency_key: `mobile-${Date.now()}-${crypto.randomUUID?.() || Math.random().toString(16).slice(2)}`, payload: { url, item_limit: Number($("itemLimit").value || 1) } }) });
+      const task = await api("/api/cloud/tasks", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ idempotency_key: `mobile-${Date.now()}-${crypto.randomUUID?.() || Math.random().toString(16).slice(2)}`, payload: { url, item_limit: Number($("itemLimit").value || 1), analysis_mode: "quick", analysis_strategy: "multi_agent" } }) });
       notice("已提交，正在等待电脑 Worker。请不要关闭此页面。"); renderTask(task); clearTimeout(state.pollTimer); poll(task.task_id);
     } catch (error) { notice(error.message, true); } finally { $("submitButton").disabled = false; }
   }
