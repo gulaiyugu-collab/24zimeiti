@@ -1,4 +1,6 @@
 **
+!Dockerfile.control
+!requirements-cloud-control.txt
 !.render/
 !.render/**
 !工作文件/
