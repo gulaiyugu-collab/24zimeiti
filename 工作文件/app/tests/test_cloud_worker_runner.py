@@ -5,7 +5,7 @@ import unittest
 
 import httpx
 
-from app.services.cloud_worker_runner import CloudWorkerRunner, HttpCloudWorkerClient, WorkerSettings
+from app.services.cloud_worker_runner import CloudWorkerRunner, HttpCloudWorkerClient, WorkerSettings, _safe_worker_id
 
 
 class FakeClient:
@@ -35,6 +35,11 @@ class FakeClient:
 
 
 class CloudWorkerRunnerTests(unittest.TestCase):
+    def test_worker_id_is_safe_for_http_headers(self) -> None:
+        self.assertEqual("worker-local", _safe_worker_id("家用电脑"))
+        self.assertEqual("worker-01", _safe_worker_id("worker-01"))
+        self.assertEqual("worker-local", _safe_worker_id("中文"))
+
     def test_idle_does_not_execute(self) -> None:
         client = FakeClient(None)
         runner = CloudWorkerRunner(client, executor=lambda payload: self.fail("must not execute"))

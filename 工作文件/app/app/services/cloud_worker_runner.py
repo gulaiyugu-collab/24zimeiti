@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import socket
 import threading
 import time
@@ -23,6 +24,14 @@ from app.services.acquisition import (
     AcquisitionJobStore,
     InlineAcquisitionDispatcher,
 )
+
+
+def _safe_worker_id(value: str) -> str:
+    """将 Windows/中文主机名转换为可放入 HTTP header 的 ASCII ID。"""
+    raw = str(value or "").strip()
+    safe = "".join(char if char.isascii() and (char.isalnum() or char in "-_.") else "-" for char in raw)
+    safe = re.sub(r"-+", "-", safe).strip("-._")[:64]
+    return safe or "worker-local"
 
 
 class CloudWorkerClient(Protocol):
@@ -269,6 +278,10 @@ def main() -> int:
 
     if not args.worker_token:
         parser.error("production Worker requires --worker-token or PROJECT024_CLOUD_WORKER_TOKEN")
+    raw_worker_id = args.worker_id
+    args.worker_id = _safe_worker_id(args.worker_id)
+    if args.worker_id != raw_worker_id:
+        print(f"Worker ID 已转换为 ASCII：{args.worker_id}", flush=True)
     print(
         f"云端 Worker 已启动：worker_id={args.worker_id}，控制面={args.base_url}",
         flush=True,
