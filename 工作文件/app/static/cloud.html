@@ -20,6 +20,11 @@
       .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
       #notice { min-height: 22px; margin-top: 12px; white-space: pre-wrap; }
       #result { white-space: pre-wrap; overflow-wrap: anywhere; background: #f7f9fc; padding: 12px; border-radius: 6px; font-size: 13px; }
+      .history-list { display: grid; gap: 8px; margin-top: 12px; }
+      .history-item { width: 100%; display: grid; gap: 3px; text-align: left; border: 1px solid #d9e0eb; background: #f7f9fc; color: #172033; }
+      .history-item:hover { border-color: #8ca9d8; background: #eef4fd; }
+      .history-item strong { font-size: 14px; }
+      .history-item span { color: #637089; font-size: 12px; overflow-wrap: anywhere; }
       .hidden { display: none; }
     </style>
   </head>
@@ -45,6 +50,7 @@
         <div class="muted">提交后请保持电脑 Worker 运行，否则任务会一直排队。</div>
       </section>
       <section id="statusSection" class="hidden"><strong>任务状态</strong><div id="status" class="muted" style="margin-top:8px"></div><pre id="result"></pre></section>
+      <section id="historySection" class="hidden"><strong>历史分析</strong><div id="historyList" class="history-list"></div></section>
       <div id="notice" class="muted" role="status" aria-live="polite"></div>
     </main>
     <script src="/static/cloud.js" defer></script>

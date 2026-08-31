@@ -107,6 +107,8 @@ class CloudControlPlaneTests(unittest.TestCase):
         self.assertIn("savedTaskId", script.text)
         self.assertIn("/api/cloud/tasks?limit=1", script.text)
         self.assertIn("formatTaskResult", script.text)
+        self.assertIn("loadHistory", script.text)
+        self.assertIn("history-item", page.text)
         self.assertIn("application/javascript", script.headers.get("content-type", ""))
         self.assertEqual("no-store", script.headers.get("cache-control"))
         self.assertEqual(200, self.client.get("/static/agent-panel.js").status_code)
