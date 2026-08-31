@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import threading
+import tempfile
 import unittest
+from pathlib import Path
 
 import httpx
 
@@ -35,6 +37,14 @@ class FakeClient:
 
 
 class CloudWorkerRunnerTests(unittest.TestCase):
+    def test_local_executor_accepts_string_root(self) -> None:
+        from app.services.cloud_worker_runner import make_local_acquisition_executor
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            executor = make_local_acquisition_executor(temp_dir)
+            self.assertTrue(callable(executor))
+            self.assertTrue((Path(temp_dir) / "jobs").is_dir())
+
     def test_worker_id_is_safe_for_http_headers(self) -> None:
         self.assertEqual("worker-local", _safe_worker_id("家用电脑"))
         self.assertEqual("worker-01", _safe_worker_id("worker-01"))

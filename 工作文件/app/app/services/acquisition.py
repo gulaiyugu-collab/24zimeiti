@@ -81,7 +81,7 @@ def default_acquisition_root() -> Path:
 
 class AcquisitionJobStore:
     def __init__(self, root: Path | None = None) -> None:
-        self.root = (root or default_acquisition_root()).resolve()
+        self.root = Path(root or default_acquisition_root()).expanduser().resolve()
         self.jobs_root = self.root / "jobs"
         self.cache_root = self.root / "cache"
         self.stable_cache_root = self.root / "stable-cache"
