@@ -40,5 +40,12 @@ Write-Host "已安全读取 Worker token（长度：$($token.Length)），未显
 $token = $null
 
 Write-Host "云端 Worker 即将启动：worker_id=$WorkerId，控制面=$($env:PROJECT024_CLOUD_CONTROL_BASE_URL)"
-& $PythonExe -m app.services.cloud_worker_runner
-exit $LASTEXITCODE
+Push-Location -LiteralPath $ProjectRoot
+try {
+    & $PythonExe -m app.services.cloud_worker_runner
+    $workerExitCode = $LASTEXITCODE
+}
+finally {
+    Pop-Location
+}
+exit $workerExitCode
