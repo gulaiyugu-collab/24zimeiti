@@ -54,7 +54,30 @@
     saveTaskId(task.task_id);
     $("statusSection").classList.remove("hidden");
     $("status").textContent = `任务 ${task.task_id}：${task.status}`;
-    $("result").textContent = task.result ? JSON.stringify(task.result, null, 2) : (task.error ? JSON.stringify(task.error, null, 2) : "等待电脑 Worker 领取任务…");
+    $("result").textContent = formatTaskResult(task);
+  }
+  function formatTaskResult(task) {
+    if (task.error) return `任务处理失败\n${task.error.message || "请稍后重试。"}`;
+    if (!task.result) return "等待电脑 Worker 领取任务…";
+    const result = task.result || {};
+    const lines = [];
+    if (result.message) lines.push(result.message);
+    if (result.platform) lines.push(`平台：${result.platform === "douyin" ? "抖音" : result.platform}`);
+    if (result.status === "completed") lines.push("采集已完成");
+    if (result.cache_hit) lines.push("本次使用了已有结果，未重复下载。");
+    const analysis = result.analysis && typeof result.analysis === "object" ? result.analysis : null;
+    if (analysis) {
+      if (analysis.title) lines.push(`\n标题建议：${analysis.title}`);
+      if (analysis.summary) lines.push(`\n内容总结：${analysis.summary}`);
+      if (analysis.conclusion) lines.push(`\n结论：${analysis.conclusion}`);
+      if (Array.isArray(analysis.next_actions) && analysis.next_actions.length) {
+        lines.push(`\n下一步：\n${analysis.next_actions.map((item) => `- ${item}`).join("\n")}`);
+      }
+    }
+    const missing = Array.isArray(result.missing) ? result.missing.filter(Boolean) : [];
+    if (missing.length) lines.push(`\n当前未包含：${missing.join("、")}`);
+    if (!lines.length) lines.push("任务已完成，暂无可展示的摘要。");
+    return lines.join("\n");
   }
   async function poll(taskId) {
     try {
