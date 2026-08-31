@@ -297,6 +297,12 @@ node .\tests\browser_p1_auto_acquisition.cjs http://127.0.0.1:8787
 
 ## 云端 Worker 实验入口
 
+Windows 本机可直接运行 `run-cloud-worker.ps1`，脚本会自动设置控制面地址、采集目录和 ASCII Worker ID，只在终端安全读取 Worker token：
+
+```powershell
+.\run-cloud-worker.ps1
+```
+
 `app.services.cloud_worker_runner` 是独立的出站 Worker 客户端：它从云端控制面领取任务，在本机复用现有采集/ASR 内核，并回传精简结果。Worker 不监听公网端口，也不会读取或上传 Cookie、浏览器 profile 或本地密钥。
 
 ```powershell
