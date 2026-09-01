@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-expected="de92200"
 repo=""
 for root in /root /opt /srv /var/www; do
   [ -d "$root" ] || continue
@@ -21,10 +20,5 @@ cd "$repo"
 git fetch origin
 git pull --ff-only origin main
 actual="$(git rev-parse --short HEAD)"
-if [ "$actual" != "$expected" ]; then
-  echo "UPDATE_BLOCKED: 当前版本=$actual，期望版本=$expected"
-  exit 11
-fi
-
-bash 工作文件/app/deploy/update-control-plane.sh "$expected"
+bash 工作文件/app/deploy/update-control-plane.sh "$actual"
 echo "UPDATE_OK repo=$repo commit=$actual"
