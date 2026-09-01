@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-expected="6caa8a8"
+expected="de92200"
 repo=""
 for root in /root /opt /srv /var/www; do
   [ -d "$root" ] || continue
