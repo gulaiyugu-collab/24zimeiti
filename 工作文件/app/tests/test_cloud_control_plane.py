@@ -98,7 +98,7 @@ class CloudControlPlaneTests(unittest.TestCase):
         self.assertNotIn("secret", config.text.lower())
         page = self.client.get("/cloud")
         self.assertEqual(200, page.status_code)
-        self.assertIn("项目024", page.text)
+        self.assertIn("自媒体通关助手", page.text)
         self.assertEqual("no-store", page.headers.get("cache-control"))
         script = self.client.get("/static/cloud.js")
         self.assertEqual(200, script.status_code)

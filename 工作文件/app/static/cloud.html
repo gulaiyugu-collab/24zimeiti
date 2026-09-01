@@ -3,12 +3,13 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>项目024 手机入口</title>
+    <link rel="icon" href="data:," />
+    <title>自媒体通关助手</title>
     <link rel="stylesheet" href="/static/styles.css" />
     <style>
       :root { color-scheme: light; font-family: system-ui, -apple-system, "Microsoft YaHei", sans-serif; }
       body { margin: 0; background: #f5f7fb; color: #172033; }
-      main { width: min(680px, calc(100% - 28px)); margin: 0 auto; padding: 24px 0 48px; }
+      main { width: min(980px, calc(100% - 28px)); margin: 0 auto; padding: 24px 0 48px; }
       h1 { margin: 0 0 6px; font-size: 26px; }
       .muted { color: #637089; font-size: 14px; }
       section { background: white; border: 1px solid #e2e7f0; border-radius: 8px; padding: 18px; margin-top: 16px; }
@@ -19,7 +20,24 @@
       button:disabled { opacity: .55; cursor: wait; }
       .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
       #notice { min-height: 22px; margin-top: 12px; white-space: pre-wrap; }
-      #result { white-space: pre-wrap; overflow-wrap: anywhere; background: #f7f9fc; padding: 12px; border-radius: 6px; font-size: 13px; }
+      #result { overflow-wrap: anywhere; }
+      .result-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+      .result-card { min-width: 0; background: #fff; border: 1px solid #e2e7f0; border-radius: 8px; padding: 16px; }
+      .result-card--wide { grid-column: 1 / -1; }
+      .result-card h3 { margin: 0 0 10px; font-size: 18px; }
+      .result-card h4 { margin: 14px 0 6px; font-size: 14px; }
+      .result-card p { margin: 8px 0; line-height: 1.65; white-space: pre-wrap; }
+      .result-card ul, .result-card ol { margin: 8px 0; padding-left: 20px; line-height: 1.7; }
+      .script-block { white-space: pre-wrap; background: #f7f9fc; border-left: 3px solid #1d5fd1; padding: 12px; border-radius: 4px; }
+      .shooting-table-wrap { overflow-x: auto; }
+      .shooting-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+      .shooting-table th, .shooting-table td { border: 1px solid #d9e0eb; padding: 8px; text-align: left; vertical-align: top; }
+      .shooting-table th { background: #f2f5fa; white-space: nowrap; }
+      .result-status { display: inline-block; padding: 3px 8px; border-radius: 999px; background: #e8eef9; color: #1d4e9e; font-size: 12px; }
+      .result-status--warning { background: #fff4d6; color: #875b00; }
+      .consent-row { display: flex; align-items: center; gap: 8px; font-weight: 400; }
+      .consent-row input { width: auto; }
+      @media (max-width: 700px) { .result-grid { grid-template-columns: 1fr; } .result-card--wide { grid-column: auto; } }
       .history-list { display: grid; gap: 8px; margin-top: 12px; }
       .history-item { width: 100%; display: grid; gap: 3px; text-align: left; border: 1px solid #d9e0eb; background: #f7f9fc; color: #172033; }
       .history-item:hover { border-color: #8ca9d8; background: #eef4fd; }
@@ -30,8 +48,7 @@
   </head>
   <body>
     <main>
-      <h1>项目024 手机入口</h1>
-      <div class="muted">手机只负责登录、提交链接和查看状态；视频采集与 GPU 转写仍在你的电脑上进行。</div>
+      <h1>自媒体通关助手</h1>
       <section id="authSection">
         <strong>先登录</strong>
         <label for="email">邮箱</label>
@@ -46,14 +63,15 @@
         <input id="url" type="url" placeholder="粘贴公开作品链接" />
         <label for="itemLimit">采集数量</label>
         <input id="itemLimit" type="number" min="1" max="20" value="1" />
+        <label for="productContext">已确认的商品或业务资料（可选）</label>
+        <textarea id="productContext" rows="4" placeholder="商品名称、型号、真实卖点、禁用表述；没有就留空"></textarea>
+        <label class="consent-row"><input id="paidConsent" type="checkbox" /> 允许使用服务端内容模型生成完整研究稿和内容包（可能产生 API 费用）</label>
         <div class="actions"><button id="submitButton">提交任务</button></div>
-        <div class="muted">提交后请保持电脑 Worker 运行，否则任务会一直排队。</div>
       </section>
-      <section id="statusSection" class="hidden"><strong>任务状态</strong><div id="status" class="muted" style="margin-top:8px"></div><pre id="result"></pre></section>
+      <section id="statusSection" class="hidden"><strong>任务状态</strong><div id="status" class="muted" style="margin-top:8px"></div><div id="result"></div></section>
       <section id="historySection" class="hidden"><strong>历史分析</strong><div id="historyList" class="history-list"></div></section>
       <div id="notice" class="muted" role="status" aria-live="polite"></div>
     </main>
     <script src="/static/cloud.js" defer></script>
-    <script src="/static/agent-panel.js" defer></script>
   </body>
 </html>

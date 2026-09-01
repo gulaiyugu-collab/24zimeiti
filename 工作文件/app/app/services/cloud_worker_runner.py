@@ -91,6 +91,10 @@ class HttpCloudWorkerClient:
             base_url=self.base_url,
             headers=headers,
             timeout=30.0,
+            # The control plane may sit behind a proxy that closes idle
+            # keep-alive sockets.  A fresh connection avoids reusing a socket
+            # that has already been closed by the remote side.
+            limits=httpx.Limits(max_connections=4, max_keepalive_connections=0),
             transport=transport,
         )
 
@@ -105,24 +109,42 @@ class HttpCloudWorkerClient:
             raise RuntimeError("云端响应必须是 JSON 对象")
         return data
 
+    def _request_json(self, method: str, path: str, **kwargs: Any) -> dict[str, Any]:
+        """Issue a control-plane request with bounded transport retries.
+
+        A ``RemoteProtocolError`` means the server closed the connection before
+        an HTTP response arrived.  Retrying transport failures keeps the local
+        Worker alive across brief proxy/server restarts while leaving HTTP 4xx
+        and 5xx responses visible to the caller.
+        """
+        last_error: httpx.TransportError | None = None
+        for attempt in range(3):
+            try:
+                return self._json(self._client.request(method, path, **kwargs))
+            except httpx.TransportError as exc:
+                last_error = exc
+                if attempt == 2:
+                    break
+                time.sleep(0.25 * (attempt + 1))
+        assert last_error is not None
+        raise last_error
+
     def claim(self, *, lease_seconds: int) -> dict[str, Any] | None:
-        data = self._json(self._client.post("/workers/claim", params={"lease_seconds": lease_seconds}))
+        data = self._request_json("POST", "/workers/claim", params={"lease_seconds": lease_seconds})
         task = data.get("task")
         return task if isinstance(task, dict) else None
 
     def heartbeat(self, task_id: str, *, lease_seconds: int) -> dict[str, Any]:
-        return self._json(
-            self._client.post(f"/tasks/{task_id}/heartbeat", json={"lease_seconds": lease_seconds})
+        return self._request_json(
+            "POST", f"/tasks/{task_id}/heartbeat", json={"lease_seconds": lease_seconds}
         )
 
     def complete(self, task_id: str, *, result: dict[str, Any]) -> dict[str, Any]:
-        return self._json(self._client.post(f"/tasks/{task_id}/complete", json={"result": result}))
+        return self._request_json("POST", f"/tasks/{task_id}/complete", json={"result": result})
 
     def fail(self, task_id: str, *, error: dict[str, Any], retryable: bool) -> dict[str, Any]:
-        return self._json(
-            self._client.post(
-                f"/tasks/{task_id}/fail", json={"error": error, "retryable": retryable}
-            )
+        return self._request_json(
+            "POST", f"/tasks/{task_id}/fail", json={"error": error, "retryable": retryable}
         )
 
 

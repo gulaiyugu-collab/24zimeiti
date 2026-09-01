@@ -159,6 +159,31 @@ class CloudWorkerRunnerTests(unittest.TestCase):
             seen,
         )
 
+    def test_http_client_retries_remote_protocol_error(self) -> None:
+        attempts = 0
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal attempts
+            attempts += 1
+            if attempts == 1:
+                raise httpx.RemoteProtocolError("server disconnected without sending a response")
+            return httpx.Response(
+                200,
+                json={"task": None},
+                request=request,
+            )
+
+        client = HttpCloudWorkerClient(
+            "https://cloud.example",
+            "worker-http",
+            transport=httpx.MockTransport(handler),
+        )
+        try:
+            self.assertIsNone(client.claim(lease_seconds=120))
+        finally:
+            client.close()
+        self.assertEqual(2, attempts)
+
 
 if __name__ == "__main__":
     unittest.main()
